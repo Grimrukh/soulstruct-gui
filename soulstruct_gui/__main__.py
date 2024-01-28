@@ -34,7 +34,7 @@ else:
 
 from soulstruct._logging import CONSOLE_HANDLER, FILE_HANDLER
 from soulstruct.config import DEFAULT_PROJECT_PATH
-from soulstruct.games import get_game
+from soulstruct.games import Game, get_game
 from soulstruct.utilities.files import read_json
 from soulstruct.utilities.text import word_wrap
 
@@ -43,6 +43,24 @@ from soulstruct_gui.misc.game_selector import GameSelector
 
 LOG_LEVELS = {"debug", "info", "warning", "error", "fatal", "critical"}
 _LOGGER = logging.getLogger("soulstruct_gui")
+
+
+def _import_game_gui_submodule(game: Game):
+    match game.variable_name:
+        case "DARK_SOULS_PTDE":
+            from soulstruct_gui import darksouls1ptde
+            return darksouls1ptde
+        case "DARK_SOULS_DSR":
+            from soulstruct_gui import darksouls1r
+            return darksouls1r
+        case "BLOODBORNE":
+            from soulstruct_gui import bloodborne
+            return bloodborne
+        case "ELDENRING":
+            from soulstruct_gui import eldenring
+            return eldenring
+        case _:
+            raise ValueError(f"Game has no GUI support: {game.variable_name}")
 
 
 parser = argparse.ArgumentParser(prog="soulstruct_gui", description="Launch Soulstruct programs or adjust settings.")
@@ -131,7 +149,7 @@ def get_existing_project_game(project_path: str):
     return None
 
 
-def soulstruct_main(ss_args) -> bool:
+def soulstruct_gui_main(ss_args) -> bool:
 
     try:
         console_log_level = int(ss_args.consoleLogLevel)
@@ -180,54 +198,6 @@ def soulstruct_main(ss_args) -> bool:
         Text = game.import_game_submodule("text").MSGDirectory(source)
         return ss_args.console
 
-    if ss_args.binderpack is not None:
-        from soulstruct.containers import Binder
-        binder = Binder.from_unpacked_path(ss_args.binderpack)
-        binder.write()
-        return False
-
-    if ss_args.binderunpack is not None:
-        from soulstruct.containers import Binder
-        binder = Binder.from_path(ss_args.binderunpack)
-        binder.write_unpacked_directory()
-        return False
-
-    if ss_args.tpfunpack is not None:
-        from soulstruct.containers.tpf import TPF
-        tpf = TPF.from_path(ss_args.tpfunpack)
-        tpf.write_unpacked_directory()
-        return False
-
-    if ss_args.tpfpack is not None:
-        from soulstruct.containers.tpf import TPF
-        tpf = TPF.from_unpacked_path(ss_args.tpfpack)
-        tpf.write()
-        return False
-
-    if ss_args.restorebak is not None:
-        from soulstruct.utilities.files import restore_bak
-        # NOTE: Dangerous enough that I require user confirmation if the non-BAK file exists.
-        target = Path(ss_args.restorebak)
-        if target.is_file():
-            replaced_path = Path(target.with_name(target.name.removesuffix(".bak")))
-            if replaced_path.is_file() and input(
-                f"Are you sure you want to overwrite file {replaced_path} with restored BAK file? "
-                f"Type 'y' to confirm: "
-            ).lower() != "y":
-                return False
-        elif target.is_dir():
-            if input(
-                f"Are you sure you want to restore all BAK files in {ss_args.restorebak} (overwriting non-BAK files)? "
-                f"Type 'y' to confirm: "
-            ).lower() != "y":
-                return False
-        else:
-            _LOGGER.warning(f"Could not find file or directory {ss_args.restorebak} to restore.")
-            return False
-        count = restore_bak(ss_args.restorebak, delete_baks=False)
-        _LOGGER.info(f"{count} bak files restored (bak files not deleted).")
-        return False
-
     # No specific type. Open entire Soulstruct Project.
     game = get_existing_project_game(source) if source else None
     if game is None:
@@ -251,7 +221,7 @@ def soulstruct_main(ss_args) -> bool:
     if ss_args.console:
         # Console only.
         global Project
-        Project = game.import_game_submodule("project").GameDirectoryProject(source)
+        Project = _import_game_gui_submodule(game).GameDirectoryProject(source)
         if ss_args.show_console_startup:
             if colorama_init:
                 colorama_init()
@@ -274,14 +244,18 @@ def soulstruct_main(ss_args) -> bool:
             )
         return True
 
+    if not game:
+        # No game selected.
+        return False
+
     # Window.
-    window = game.import_game_submodule("project").ProjectWindow(source)
+    window = _import_game_gui_submodule(game).ProjectWindow(source)
     window.wait_window()  # MAIN LOOP
     return False
 
 
 try:
-    launch_interactive = soulstruct_main(parser.parse_args())
+    launch_interactive = soulstruct_gui_main(parser.parse_args())
 except Exception as ex:
     _LOGGER.exception(f"Error occurred in soulstruct.__main__: {ex}")
     launch_interactive = False
