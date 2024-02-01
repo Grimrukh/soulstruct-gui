@@ -109,8 +109,8 @@ class GameDirectoryProject(_BaseGameDirectoryProject):
         self,
         import_directory: Path | str,
         put_enums_in_events_folder=False,
-        translate_japanese_map_entity_names=True,
-        remove_broken_regions=True,
+        translate_japanese_map_entity_names=False,
+        remove_broken_regions=False,
     ):
         maps = self._default_import(ProjectDataType.Maps, import_directory)  # type: MapStudioDirectory
 
