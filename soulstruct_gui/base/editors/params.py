@@ -319,12 +319,14 @@ class ParamsEditor(BaseFieldEditor):
     def get_field_display_info(self, field_dict: ParamRow, field_name) -> tuple[str, bool, GAME_INT_TYPE, str]:
         field_metadata = field_dict.get_field_metadata(field_name)  # type: ParamFieldMetadata
         if field_metadata.dynamic_callback:
+            # Type, suffix, and tooltip of this field depend upon the value of one or more other fields (e.g. Item Lot
+            # item type is determined by item category).
             game_type, suffix, tooltip = field_metadata.dynamic_callback(field_dict)
             field_name += suffix
             tooltip = f"{field_metadata.internal_name}: {tooltip}"
         else:  # static metadata
-            game_type = field_metadata.game_type
-            tooltip = f"{field_metadata.internal_name}: {field_metadata.tooltip}"
+            game_type = field_metadata.param_enum or field_metadata.game_type  # prefer enum if available
+            tooltip = f"{field_metadata.internal_name} ({game_type.__name__}): {field_metadata.tooltip}"
         return field_name, not field_metadata.hide, game_type, tooltip
 
     def get_field_names(self, field_dict: ParamRow) -> list[str]:

@@ -33,9 +33,8 @@ class FieldRow:
 
     These are only created once, and their contents are refreshed when needed (e.g. when a new entry is selected).
     Unlike entries, field value widgets may be Labels (which turn into Entries for editing), Checkbuttons, or
-    Comboboxes. Each of these widgets is created for each row, so they can be hidden/dispalyed when needed by a
-    given field type, rather than dynamically creating and destroying them every time a new entry/category is
-    selected.
+    Comboboxes. Each of these widgets is created for each row, so they can be toggled on and off as needed by a given
+    field type, rather than dynamically creating and destroying them every time a new entry/category is selected.
     """
 
     CAMEL_CASE_NICKNAMES = True
@@ -149,8 +148,8 @@ class FieldRow:
 
     def update_field(
         self,
-        name,
-        nickname,
+        name: str,
+        nickname: str,
         value: tp.Any,
         field_type: type,
         docstring="",
@@ -191,7 +190,9 @@ class FieldRow:
         self._update_field_int(value)
 
     def _update_field_IntEnum(self, value):
+        # ComboBox choices show both the value and name of the enum.
         self.value_combobox["values"] = [f"{e.value} {camel_case_to_spaces(e.name)}" for e in self.field_type]
+        # Set current enum.
         try:
             enum_name = getattr(self.field_type(value), "name")
         except ValueError:

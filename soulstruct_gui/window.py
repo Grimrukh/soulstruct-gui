@@ -834,7 +834,7 @@ class SmartFrame(tk.Frame):
 
     @staticmethod
     def info_dialog(title, message, **kwargs):
-        messagebox.showinfo(title, message, **kwargs)
+        return messagebox.showinfo(title, message, **kwargs)
 
     @staticmethod
     def warning_dialog(title, message, **kwargs):
@@ -842,7 +842,7 @@ class SmartFrame(tk.Frame):
 
     @staticmethod
     def error_dialog(title, message, **kwargs):
-        messagebox.showerror(title, message, **kwargs)
+        return messagebox.showerror(title, message, **kwargs)
 
     @staticmethod
     def yesno_dialog(title, message, **kwargs):
@@ -850,6 +850,7 @@ class SmartFrame(tk.Frame):
 
     @contextmanager
     def set_master(self, master=None, auto_rows=None, auto_columns=None, grid_defaults=None, **kwargs):
+        """Context manager to temporarily set the master of the SmartFrame. Resets to previous master after use."""
         previous_frame = self.current_frame
 
         if master is None:
@@ -877,13 +878,14 @@ class SmartFrame(tk.Frame):
         else:
             previous_grid_defaults = {}
 
-        yield self.current_frame
-
-        self.current_row = previous_auto_row
-        self.current_column = previous_auto_column
-        if grid_defaults is not None:
-            self.grid_defaults = previous_grid_defaults
-        self.current_frame = previous_frame
+        try:
+            yield self.current_frame
+        finally:
+            self.current_row = previous_auto_row
+            self.current_column = previous_auto_column
+            if grid_defaults is not None:
+                self.grid_defaults = previous_grid_defaults
+            self.current_frame = previous_frame
 
     # INTERNAL METHODS
 
@@ -947,7 +949,7 @@ class SmartFrame(tk.Frame):
 
 
 class SmartMenu(tk.Menu):
-    """Menu subclass that automatically applies style defaults to `.add_command()`."""
+    """Menu subclass that automatically applies style defaults to kwargs passed to `tk.Menu` methods."""
 
     style: dict[str, str]
 
