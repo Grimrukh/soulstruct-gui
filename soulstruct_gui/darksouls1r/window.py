@@ -158,7 +158,9 @@ class ProjectWindow(_BaseProjectWindow):
     def _write_all_nvmdumps(self):
         """Write NVMDUMP files for all maps."""
         for map_stem, msb in self.project.maps.files.items():
-            msb.write_nvmdump(self.project.game_root / f"map/{map_stem}/{map_stem}.nvmdump")
+            nvmdump_path = self.project.game_root / f"map/{map_stem}/{map_stem}.nvmdump"
+            nvmdump = msb.get_nvmdump(map_stem)
+            nvmdump_path.write_text(nvmdump)
 
     def _reload_warp(self):
         if not self.linker.hook_created:
