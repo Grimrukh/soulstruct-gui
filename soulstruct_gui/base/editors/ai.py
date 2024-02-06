@@ -453,7 +453,7 @@ class AIEditor(BaseEditor):
         editor_i_frame.bind("<Configure>", lambda e, c=self.script_editor_canvas: self.reset_canvas_scroll_region(c))
 
         self.lua_script_editor = self.CustomWidget(
-            editor_i_frame,
+            frame=editor_i_frame,
             custom_widget_class=AIScriptTkTextEditor,
             set_style_defaults=("text", "cursor"),
             row=0,
@@ -876,8 +876,13 @@ class AIEditor(BaseEditor):
 
         self.entry_i_frame.columnconfigure(0, weight=1)
         self.entry_i_frame.columnconfigure(1, weight=1)
-        if self.displayed_entry_count == 0:
-            self.select_entry_row_index(None)
+        # If invalid, active row is allowed to move back by ONE. Otherwise, it's deselected.
+        if self.active_row_index is not None:
+            if 0 < row == self.active_row_index:
+                self.select_entry_row_index(row - 1)
+            elif self.active_row_index > row:
+                self.select_entry_row_index(None)
+
         self._refresh_range_buttons()
 
     def select_entry_id(self, entry_id, goal_type=None, set_focus_to_text=True, edit_if_already_selected=True):
@@ -889,7 +894,12 @@ class AIEditor(BaseEditor):
         )
 
     def select_entry_row_index(
-        self, row_index, set_focus_to_text=True, edit_if_already_selected=True, id_clicked=False, check_unsaved=True
+        self,
+        row_index: int | None,
+        set_focus_to_text=True,
+        edit_if_already_selected=True,
+        id_clicked=False,
+        check_unsaved=True,
     ):
         """Select entry from row index, based on currently displayed category and ID range."""
         old_row_index = self.active_row_index
@@ -999,9 +1009,12 @@ class AIEditor(BaseEditor):
             entry_id=entry_id + offset, goal_type=goal_type, text=text, at_index=goal_index, new_goal=goal.copy()
         )
 
-    def delete_entry(self, row_index, category=None):
+    def delete_entry(self, row_index: int | None, category=None, must_be_selected=False):
         """Deletes entry and returns it (or False upon failure) so that the action manager can undo the deletion."""
         if row_index is None:
+            self.bell()
+            return
+        if must_be_selected and self.active_row_index is None or row_index != self.active_row_index:
             self.bell()
             return
 
@@ -1009,7 +1022,7 @@ class AIEditor(BaseEditor):
         self._cancel_entry_text_edit()
         goal = self.get_goal(row_index)
         self.get_selected_bnd().goals.remove(goal)
-        self.select_entry_row_index(None, check_unsaved=False)
+        self.select_entry_row_index(None, check_unsaved=False)  # we DO deselect entries in this subclass
         self.refresh_entries()
 
     def get_selected_bnd(self) -> LuaBND:

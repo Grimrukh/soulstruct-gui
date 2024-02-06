@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-__all__ = ["SmartFrame", "CustomDialog", "ToolTip", "bind_to_all_children", "embed_component"]
+__all__ = [
+    "WindowError",
+    "SmartFrame",
+    "CustomDialog",
+    "ToolTip",
+    "bind_to_all_children",
+    "embed_component",
+]
 
+import contextlib
 import logging
 import tkinter as tk
 import typing as tp
-from contextlib import contextmanager
 from ctypes import windll
 from functools import wraps
-from typing import Optional
 from tkinter.constants import *
 from tkinter import filedialog, messagebox, ttk
 
@@ -25,6 +31,10 @@ if SET_DPI_AWARENESS:
             f"Could not set DPI awareness of system. GUI font may appear blurry on scaled Windows displays.\n"
             f"Error: {str(e)}"
         )
+
+
+class WindowError(Exception):
+    """Exception raised by invalid `SmartFrame` state."""
 
 
 def bind_to_all_children(widget: tk.BaseWidget, sequence, func, add=None):
@@ -49,58 +59,63 @@ def _unbind_to_mousewheel(widget):
     widget.unbind_all("<Shift-MouseWheel>")
 
 
-def _grid_label(frame, label, component, label_position):
-    if label_position == "left":
-        label.grid(row=0, column=0, padx=(0, 2))
-        component.grid(row=0, column=1)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=0)
-        frame.columnconfigure(1, weight=1)
-    elif label_position == "right":
-        label.grid(row=0, column=1, padx=(2, 0))
-        component.grid(row=0, column=0)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
-        frame.columnconfigure(1, weight=0)
-    elif label_position == "above":
-        label.grid(row=0, column=0)
-        component.grid(row=1, column=0)
-        frame.rowconfigure(0, weight=0)
-        frame.rowconfigure(1, weight=1)
-        frame.columnconfigure(0, weight=1)
-    elif label_position == "below":
-        label.grid(row=1, column=0)
-        component.grid(row=0, column=0)
-        frame.rowconfigure(0, weight=1)
-        frame.rowconfigure(1, weight=0)
-        frame.columnconfigure(0, weight=1)
-    else:
-        raise ValueError(
-            f"Invalid label position: {repr(label_position)}. " f"Must be 'left', 'right', 'above', or 'below'."
-        )
+def _grid_label(frame: tk.Frame, label: tk.Label, component, label_position: str):
+    match label_position.lower():
+        case "left":
+            label.grid(row=0, column=0, padx=(0, 2))
+            component.grid(row=0, column=1)
+            frame.rowconfigure(0, weight=1)
+            frame.columnconfigure(0, weight=0)
+            frame.columnconfigure(1, weight=1)
+        case "right":
+            label.grid(row=0, column=1, padx=(2, 0))
+            component.grid(row=0, column=0)
+            frame.rowconfigure(0, weight=1)
+            frame.columnconfigure(0, weight=1)
+            frame.columnconfigure(1, weight=0)
+        case "above":
+            label.grid(row=0, column=0)
+            component.grid(row=1, column=0)
+            frame.rowconfigure(0, weight=0)
+            frame.rowconfigure(1, weight=1)
+            frame.columnconfigure(0, weight=1)
+        case "below":
+            label.grid(row=1, column=0)
+            component.grid(row=0, column=0)
+            frame.rowconfigure(0, weight=1)
+            frame.rowconfigure(1, weight=0)
+            frame.columnconfigure(0, weight=1)
+        case _:
+            raise ValueError(
+                f"Invalid label position: {repr(label_position)}. Must be 'left', 'right', 'above', or 'below'."
+            )
 
 
 def embed_component(component_func):
-    """Handles labels and scrollbars for any decorated widget function."""
+    """Handles labels and scrollbars for decorated `SmartFrame` methods."""
 
     @wraps(component_func)
     def component_with_label(
         self: SmartFrame,
-        frame=None,
+        frame: tk.Frame | None = None,
         label="",
-        label_font=None,
-        label_position=None,
+        label_font: FONT_TYPING = None,
+        label_position: str = None,
         label_fg=None,
         label_bg=None,
         vertical_scrollbar=False,
         horizontal_scrollbar=False,
         no_grid=False,
-        tooltip_text=None,
-        **kwargs,
+        tooltip_text="",
+        **grid_style_component_kwargs,
     ):
 
         grid_kwargs = self.grid_defaults.copy()
-        passed_grid_kwargs = {key: kwargs.pop(key) for key in list(kwargs.keys()) if key in _GRID_KEYWORDS}
+        passed_grid_kwargs = {
+            key: grid_style_component_kwargs.pop(key)
+            for key in list(grid_style_component_kwargs.keys())
+            if key in _GRID_KEYWORDS
+        }
         if passed_grid_kwargs and no_grid:
             raise ValueError("If 'no_grid' is True, no grid keyword arguments can be used.")
         grid_kwargs.update(passed_grid_kwargs)
@@ -117,7 +132,7 @@ def embed_component(component_func):
                 raise ValueError(f"You cannot specify {dim} with a keyword while auto_{dim}s is in effect.")
 
         if frame is None:
-            frame = self.master_frame if self.current_frame is None else self.current_frame
+            frame = self.current_frame or self.master_frame
 
         if label_position is None:
             if component_func.__name__ in {"Checkbutton", "Entry"}:
@@ -127,9 +142,9 @@ def embed_component(component_func):
 
         if label:
             if label_bg is None:
-                label_bg = kwargs.get("bg", self.STYLE_DEFAULTS["bg"])
+                label_bg = grid_style_component_kwargs.get("bg", self.STYLE_DEFAULTS["bg"])
             if label_fg is None:
-                label_fg = kwargs.get("fg", self.STYLE_DEFAULTS["fg"])
+                label_fg = grid_style_component_kwargs.get("fg", self.STYLE_DEFAULTS["fg"])
             label_font = self.resolve_font(label_font, "label")
             inherit_bg = frame.cget("bg")
             frame = tk.Frame(frame, bg=inherit_bg)
@@ -138,7 +153,7 @@ def embed_component(component_func):
         if vertical_scrollbar or horizontal_scrollbar:
             inherit_bg = frame.cget("bg")
             frame_with_scrollbars = tk.Frame(frame, bg=inherit_bg)
-            component = component_func(self, frame=frame_with_scrollbars, **kwargs)
+            component = component_func(self, frame=frame_with_scrollbars, **grid_style_component_kwargs)
             component.grid(row=0, column=0, sticky="nsew")
             if vertical_scrollbar:
                 vertical_scrollbar_w = tk.Scrollbar(frame_with_scrollbars, orient=VERTICAL, command=component.yview)
@@ -166,7 +181,7 @@ def embed_component(component_func):
             elif not no_grid and grid_kwargs:
                 frame_with_scrollbars.grid(**grid_kwargs)
         else:
-            component = component_func(self, frame=frame, **kwargs)
+            component = component_func(self, frame=frame, **grid_style_component_kwargs)
             if label:
                 _grid_label(frame, label, component, label_position)
                 if not no_grid and grid_kwargs:
@@ -175,7 +190,7 @@ def embed_component(component_func):
             elif not no_grid and grid_kwargs:
                 component.grid(**grid_kwargs)
 
-        if tooltip_text is not None:
+        if tooltip_text:
             ToolTip(component, text=tooltip_text)
 
         return component
@@ -187,6 +202,13 @@ SMALL_FONT = ("Inconsolata Regular", 12)
 REGULAR_FONT = ("Inconsolata Regular", 14)
 BOLD_FONT = ("Inconsolata Bold", 14)
 HEADING_FONT = ("Inconsolata Bold", 18)
+
+
+# Widget types that can be set as the `frame` argument of `SmartFrame` widget wrapper methods.
+MASTER_TYPING = tp.Union[tk.Frame, tk.Toplevel, ttk.Notebook, tk.Canvas, None]
+
+# Accepted types for `font` arguments that are processed into `(type, size)` tuples for widgets.
+FONT_TYPING = tuple[str | None, int | None] | str | int | None
 
 
 # noinspection PyPep8Naming
@@ -222,10 +244,16 @@ class SmartFrame(tk.Frame):
         "NO": {"fg": "#FFFFFF", "bg": "#444444", "width": 20},
     }
 
-    _ON_IMAGE: tk.PhotoImage = None
-    _OFF_IMAGE: tk.PhotoImage = None
+    _ON_IMAGE: tk.PhotoImage | None = None
+    _OFF_IMAGE: tk.PhotoImage | None = None
 
-    toplevel: Optional[tk.Toplevel]
+    toplevel: tk.Toplevel | None
+    style: ttk.Style
+    grid_defaults: dict[str, tp.Any]
+    current_row: int | None
+    current_column: int | None
+    master_frame: tk.Frame
+    current_frame: tk.Frame
 
     def __init__(self, master=None, toplevel=True, window_title="Window Title", icon_data=None, **frame_kwargs):
         """My ultimate `tkinter` wrapper class."""
@@ -255,6 +283,7 @@ class SmartFrame(tk.Frame):
         self.current_row = None
         self.current_column = None
 
+        # Create class-level checkbutton images, if missing.
         if self._ON_IMAGE is None:
             self.__class__._ON_IMAGE = tk.PhotoImage(width=48, height=24)
             self.__class__._ON_IMAGE.put(("#4F4",), to=(24, 0, 47, 23))
@@ -310,7 +339,12 @@ class SmartFrame(tk.Frame):
             self.toplevel.quit()
 
     def set_geometry(
-        self, master=None, dimensions=None, absolute_position=None, relative_position=None, transient=False
+        self,
+        master: tk.BaseWidget = None,
+        dimensions: tuple[int, int] = None,
+        absolute_position: tuple[int, int] = None,
+        relative_position: tuple[float, float] = None,
+        transient=False,
     ):
         """Set the size and position of this SmartFrame, if `toplevel=True`. Should not be called otherwise.
 
@@ -321,7 +355,7 @@ class SmartFrame(tk.Frame):
 
         Args:
             master (tk.BaseWidget): master of this SmartFrame, used for calculating `relative_position` and `transient`
-                master. Defaults to master set in constructor.
+                master. Defaults to master of `self.toplevel`.
             dimensions (tuple): pair of (width, height) values in pixels. Defaults to dimensions requested by the
                 window.
             absolute_position (tuple): pair of (x, y) values in pixels on the screen, where (0, 0) is the bottom-left
@@ -333,9 +367,8 @@ class SmartFrame(tk.Frame):
                 master, and will be automatically hidden when its master is iconified or withdrawn.
         """
         if self.toplevel is None:
-            raise AttributeError("SmartFrame was created with `toplevel=False` and has no geometry to set.")
-        if master is None:
-            master = self.toplevel.master
+            raise RuntimeError("SmartFrame was created with `toplevel=False` and has no geometry to set.")
+        master = master or self.toplevel.master
 
         if absolute_position is not None and relative_position is not None:
             raise ValueError("You cannot specify both `absolute_position` and `relative_position` of the SmartFrame.")
@@ -438,31 +471,33 @@ class SmartFrame(tk.Frame):
             font[1] if font[1] else self.FONT_DEFAULTS[default_key][1],
         )
 
-    # VARIABLES
+    # region Variables
 
-    def BooleanVar(self, master=None, **kwargs):
-        if master is None:
-            master = self
-        return tk.BooleanVar(master, **kwargs)
+    def BooleanVar(self, master=None, value: bool = None, name: str = None):
+        return tk.BooleanVar(master or self, value=value, name=name)
 
-    def IntVar(self, master=None, **kwargs):
-        if master is None:
-            master = self
-        return tk.IntVar(master, **kwargs)
+    def IntVar(self, master=None, value: int = None, name: str = None):
+        return tk.IntVar(master or self, value=value, name=name)
 
-    def DoubleVar(self, master=None, **kwargs):
-        if master is None:
-            master = self
-        return tk.DoubleVar(master, **kwargs)
+    def DoubleVar(self, master=None, value: float = None, name: str = None):
+        return tk.DoubleVar(master or self, value=value, name=name)
 
-    def StringVar(self, master=None, **kwargs):
-        if master is None:
-            master = self
-        return tk.StringVar(master, **kwargs)
+    def StringVar(self, master=None, value: str = None, name: str = None):
+        return tk.StringVar(master or self, value=value, name=name)
 
-    # WIDGETS
+    # endregion
 
-    def Toplevel(self, frame=None, title="Window Title", row_weights=(), column_weights=(), **kwargs):
+    # region Widgets
+
+    def Toplevel(
+        self,
+        frame: MASTER_TYPING = None,
+        title="Window Title",
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
+    ):
+        """NOTE: This widget wrapper is NOT decorated with `embed_component`."""
         kwargs.setdefault("bg", self.STYLE_DEFAULTS["bg"])
         toplevel = tk.Toplevel(frame, **kwargs)
         toplevel.title(title)
@@ -473,7 +508,13 @@ class SmartFrame(tk.Frame):
         return toplevel
 
     @embed_component
-    def Notebook(self, frame=None, row_weights=(), column_weights=(), **kwargs):
+    def Notebook(
+        self,
+        frame: MASTER_TYPING = None,
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
+    ):
         notebook = ttk.Notebook(frame, **kwargs)
         for i, w in enumerate(row_weights):
             notebook.rowconfigure(i, weight=w)
@@ -482,7 +523,13 @@ class SmartFrame(tk.Frame):
         return notebook
 
     @embed_component
-    def Frame(self, frame=None, row_weights=(), column_weights=(), **kwargs):
+    def Frame(
+        self,
+        frame: MASTER_TYPING = None,
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         frame = tk.Frame(frame, **kwargs)
         for i, w in enumerate(row_weights):
@@ -492,7 +539,14 @@ class SmartFrame(tk.Frame):
         return frame
 
     @embed_component
-    def SmartFrame(self, frame=None, smart_frame_class=None, row_weights=(), column_weights=(), **kwargs):
+    def SmartFrame(
+        self,
+        frame: MASTER_TYPING = None,
+        smart_frame_class: type[SmartFrame] = None,
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
+    ):
         if smart_frame_class is None:
             smart_frame_class = SmartFrame
         elif not issubclass(smart_frame_class, SmartFrame):
@@ -505,7 +559,13 @@ class SmartFrame(tk.Frame):
         return smart_frame
 
     @embed_component
-    def Canvas(self, frame=None, row_weights=(), column_weights=(), **kwargs):
+    def Canvas(
+        self,
+        frame: MASTER_TYPING = None,
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         canvas = tk.Canvas(frame, **kwargs)
         for i, w in enumerate(row_weights):
@@ -517,13 +577,13 @@ class SmartFrame(tk.Frame):
     @embed_component
     def Button(
         self,
-        command,
-        frame=None,
-        text=None,
-        text_padx=None,
-        text_pady=None,
-        font=None,
-        style=None,
+        command: tp.Callable[[], None],
+        frame: MASTER_TYPING = None,
+        text: str = None,
+        text_padx: int = None,
+        text_pady: int = None,
+        font: FONT_TYPING = None,
+        style: ttk.Style = None,
         **kwargs,
     ):
         self.set_style_defaults(kwargs, text=True)
@@ -550,7 +610,14 @@ class SmartFrame(tk.Frame):
         return button
 
     @embed_component
-    def Checkbutton(self, frame=None, command=None, initial_state=False, text="", **kwargs):
+    def Checkbutton(
+        self,
+        frame: MASTER_TYPING = None,
+        command: tp.Callable[[], None] = None,
+        initial_state=False,
+        text="",
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         boolean_var = tk.BooleanVar(value=initial_state)
         kwargs["bg"] = "#444"
@@ -570,7 +637,14 @@ class SmartFrame(tk.Frame):
         return checkbutton
 
     @embed_component
-    def ClassicCheckbutton(self, frame=None, command=None, initial_state=False, text="", **kwargs):
+    def ClassicCheckbutton(
+        self,
+        frame: MASTER_TYPING = None,
+        command: tp.Callable[[], None] = None,
+        initial_state=False,
+        text="",
+        **kwargs,
+    ):
         """Default checkbutton style, with a box and tick."""
         self.set_style_defaults(kwargs)
         boolean_var = tk.BooleanVar(value=initial_state)
@@ -580,11 +654,17 @@ class SmartFrame(tk.Frame):
 
     @embed_component
     def Combobox(
-        self, frame=None, values=None, initial_value=None, readonly=True, width=20, on_select_function=None, **kwargs
+        self,
+        frame: MASTER_TYPING = None,
+        values: list[str] = None,
+        initial_value: str = None,
+        readonly=True,
+        width=20,
+        on_select_function=None,
+        **kwargs,
     ):
         state = "readonly" if readonly else ""
-        if initial_value is None:
-            initial_value = values[0] if values else ""
+        initial_value = initial_value or (values[0] if values else "")
         string_var = tk.StringVar(frame, value=initial_value)
         combobox = ttk.Combobox(frame, textvariable=string_var, values=values, state=state, width=width, **kwargs)
         combobox.var = string_var
@@ -592,22 +672,36 @@ class SmartFrame(tk.Frame):
             combobox.bind("<<ComboboxSelected>>", on_select_function)
         return combobox
 
-    def Menu(self, frame=None, tearoff=0, **kwargs):
-        if frame is None:
-            frame = self.current_frame
+    def Menu(
+        self,
+        frame: MASTER_TYPING = None,
+        tearoff=0,
+        **kwargs,
+    ):
+        frame = frame or self.current_frame
         for key in self.MENU_STYLE_DEFAULTS:
             kwargs.setdefault(key, self.MENU_STYLE_DEFAULTS[key])
         menu = SmartMenu(frame, tearoff=tearoff, **kwargs)
         return menu
 
     @embed_component
-    def Scrollbar(self, frame=None, **kwargs):
-        if frame is None:
-            frame = self.current_frame
+    def Scrollbar(
+        self,
+        frame: MASTER_TYPING = None,
+        **kwargs,
+    ):
+        frame = frame or self.current_frame
         return tk.Scrollbar(frame, **kwargs)
 
     @embed_component
-    def Entry(self, frame=None, initial_text="", integers_only=False, numbers_only=False, **kwargs):
+    def Entry(
+        self,
+        frame: MASTER_TYPING = None,
+        initial_text="",
+        integers_only=False,
+        numbers_only=False,
+        **kwargs,
+    ):
         if "text" in kwargs:
             _LOGGER.warning(
                 "'text' argument given to `SmartFrame.Entry()`. I recommend using `textvariable` to ensure this "
@@ -629,7 +723,13 @@ class SmartFrame(tk.Frame):
         return entry
 
     @embed_component
-    def Label(self, text="", frame=None, font=None, **kwargs):
+    def Label(
+        self,
+        frame: MASTER_TYPING = None,
+        text="",
+        font: FONT_TYPING = None,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs, text=True)
         font = self.resolve_font(font, "label")
         if isinstance(text, str):
@@ -643,7 +743,13 @@ class SmartFrame(tk.Frame):
         return label
 
     @embed_component
-    def Listbox(self, frame=None, values=(), on_select_function=None, **kwargs):
+    def Listbox(
+        self,
+        frame: MASTER_TYPING = None,
+        values: tp.Sequence[str] = (),
+        on_select_function=None,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs, text=True)
         listbox = tk.Listbox(frame, **kwargs)
         for value in values:
@@ -653,42 +759,73 @@ class SmartFrame(tk.Frame):
         return listbox
 
     @embed_component
-    def PanedWindow(self, frame=None, **kwargs):
+    def PanedWindow(
+        self,
+        frame: MASTER_TYPING = None,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         paned_window = tk.PanedWindow(frame, **kwargs)
         return paned_window
 
     @embed_component
-    def Radiobutton(self, frame=None, command=None, variable=None, **kwargs):
+    def Radiobutton(
+        self,
+        frame: MASTER_TYPING = None,
+        command: tp.Callable[[], None] = None,
+        variable: tk.IntVar = None,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
-        if variable is None:
-            variable = tk.IntVar()
+        variable = variable or tk.IntVar()
         radiobutton = tk.Radiobutton(frame, text="", variable=variable, command=command, **kwargs)
         radiobutton.var = variable
         return radiobutton
 
     @embed_component
-    def Separator(self, frame=None, orientation=HORIZONTAL, **kwargs):
+    def Separator(
+        self,
+        frame: MASTER_TYPING = None,
+        orientation=HORIZONTAL,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         return ttk.Separator(frame, orient=orientation)
 
     @embed_component
-    def Progressbar(self, frame=None, **kwargs):
+    def Progressbar(
+        self,
+        frame: MASTER_TYPING = None,
+        **kwargs,
+    ):
         return ttk.Progressbar(frame, **kwargs)
 
     @embed_component
-    def Scale(self, frame=None, limits=(0, 100), orientation=HORIZONTAL, variable=None, **kwargs):
+    def Scale(
+        self,
+        frame: MASTER_TYPING = None,
+        limits=(0, 100),
+        orientation=HORIZONTAL,
+        variable: tk.IntVar | tk.DoubleVar = None,
+        is_float: bool = None,
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs)
         if variable is None:
-            variable = tk.DoubleVar() if kwargs.pop("is_float", False) else tk.IntVar()
-        elif "is_float" in kwargs:
-            raise ValueError("Cannot set `is_float` for Scale if `variable` is given.")
+            variable = tk.DoubleVar() if is_float else tk.IntVar()  # will default to `IntVar` if `is_float=None`
+        elif is_float is not None:
+            raise ValueError("Cannot pass `is_float` keyword for `SmartFrame.Scale` if `variable` is given.")
         scale = tk.Scale(frame, from_=limits[0], to=limits[1], orient=orientation, variable=variable, **kwargs)
         scale.var = variable
         return scale
 
     @embed_component
-    def TextBox(self, frame=None, initial_text="", **kwargs):
+    def TextBox(
+        self,
+        frame: MASTER_TYPING = None,
+        initial_text="",
+        **kwargs,
+    ):
         self.set_style_defaults(kwargs, text=True, cursor=True, entry=False)
         text_box = tk.Text(frame, **kwargs)
         text_box.insert(1.0, initial_text)
@@ -696,10 +833,17 @@ class SmartFrame(tk.Frame):
 
     @embed_component
     def CustomWidget(
-        self, frame=None, custom_widget_class=None, set_style_defaults=(), row_weights=(), column_weights=(), **kwargs
+        self,
+        frame: MASTER_TYPING = None,
+        custom_widget_class: type[tk.BaseWidget] = None,
+        set_style_defaults: tp.Container[str] = (),
+        row_weights: tp.Sequence[int] = (),
+        column_weights: tp.Sequence[int] = (),
+        **kwargs,
     ):
         if custom_widget_class is None:
-            raise ValueError("custom_widget_class cannot be None.")
+            # optional `frame` argument must come first for decorator, so this is required.
+            raise ValueError("`custom_widget_class` cannot be None.")
         style_default_kwargs = {k: k in set_style_defaults for k in ("text", "cursor", "entry")}
         self.set_style_defaults(kwargs, **style_default_kwargs)
         custom_widget = custom_widget_class(frame, **kwargs)
@@ -711,18 +855,18 @@ class SmartFrame(tk.Frame):
 
     def LoadingDialog(
         self,
-        title,
-        message,
-        font=None,
-        style_defaults=None,
-        loading_dialog_subclass=None,
+        title: str,
+        message: str,
+        font: FONT_TYPING = None,
+        style_defaults: dict[str, tp.Any] = None,
+        loading_dialog_subclass: type[LoadingDialog] = None,
         **progressbar_kwargs,
     ) -> LoadingDialog:
         """Creates a child `LoadingDialog` with `style_defaults` taken from SmartFrame by default."""
         if loading_dialog_subclass is None:
             loading_dialog_subclass = LoadingDialog
         elif not issubclass(loading_dialog_subclass, LoadingDialog):
-            raise TypeError("`loading_dialog_subclass` must be a subclass of `LoadingDialog`, if specified.")
+            raise TypeError("`loading_dialog_subclass` must be a subclass of `LoadingDialog`, if given.")
 
         font = self.resolve_font(font, "label")
 
@@ -740,24 +884,24 @@ class SmartFrame(tk.Frame):
 
     def CustomDialog(
         self,
-        title,
-        message,
-        font=None,
-        button_names=("OK",),
-        button_kwargs=("OK",),
-        style_defaults=None,
-        default_output=None,
-        cancel_output=None,
-        return_output=None,
+        title: str,
+        message: str,
+        font: FONT_TYPING = None,
+        button_names: tp.Sequence[str] = ("OK",),
+        button_kwargs: tp.Sequence[str] = ("OK",),
+        style_defaults: dict[str, tp.Any] = None,
+        default_output: int = None,
+        cancel_output: int = None,
+        return_output: int = None,
         escape_enabled=True,
-        custom_dialog_subclass=None,
+        custom_dialog_subclass: type[CustomDialog] = None,
         **kwargs,
     ):
         """Creates a child `CustomDialog` with `style_defaults` taken from SmartFrame by default."""
         if custom_dialog_subclass is None:
             custom_dialog_subclass = CustomDialog
         elif not issubclass(custom_dialog_subclass, CustomDialog):
-            raise TypeError("`custom_dialog_subclass` must be a subclass of `CustomDialog`, if specified.")
+            raise TypeError("`custom_dialog_subclass` must be a subclass of `CustomDialog`, if given.")
 
         font = self.resolve_font(font, "label")
 
@@ -795,7 +939,9 @@ class SmartFrame(tk.Frame):
             return result
         return dialog.go()  # Returns index of button clicked (or default/cancel output).
 
-    # PUBLIC METHODS
+    # endregion
+
+    # region Public Utility Methods
 
     @staticmethod
     def mimic_click(button: tk.Button):
@@ -833,39 +979,54 @@ class SmartFrame(tk.Frame):
         bind_to_all_children(self, sequence=sequence, func=func, add=add)
 
     @staticmethod
-    def info_dialog(title, message, **kwargs):
+    def info_dialog(title, message, **kwargs) -> str:
         return messagebox.showinfo(title, message, **kwargs)
 
     @staticmethod
-    def warning_dialog(title, message, **kwargs):
+    def warning_dialog(title, message, **kwargs) -> str:
         return messagebox.showwarning(title, message, **kwargs)
 
     @staticmethod
-    def error_dialog(title, message, **kwargs):
+    def error_dialog(title, message, **kwargs) -> str:
         return messagebox.showerror(title, message, **kwargs)
 
     @staticmethod
-    def yesno_dialog(title, message, **kwargs):
+    def yesno_dialog(title, message, **kwargs) -> bool:
         return messagebox.askyesno(title, message, **kwargs)
 
-    @contextmanager
-    def set_master(self, master=None, auto_rows=None, auto_columns=None, grid_defaults=None, **kwargs):
-        """Context manager to temporarily set the master of the SmartFrame. Resets to previous master after use."""
+    @contextlib.contextmanager
+    def set_master(
+        self,
+        master: MASTER_TYPING | tp.Callable | str = None,
+        auto_rows: int = None,
+        auto_columns: int = None,
+        grid_defaults: dict[str, tp.Any] = None,
+        **frame_kwargs,
+    ):
+        """Context manager to temporarily set the master of the SmartFrame.
+
+        Resets to previous master after use.
+        """
         previous_frame = self.current_frame
 
         if master is None:
-            self.current_frame = self.Frame(**kwargs)
+            self.current_frame = self.Frame(**frame_kwargs)
         else:
             if isinstance(master, str):
-                master = getattr(self, master)
+                try:
+                    master = getattr(self, master)
+                except AttributeError:
+                    raise ValueError(
+                        f"Invalid master type string: {master}. Must be one of: Frame, Toplevel, Notebook, Canvas"
+                    )
             if master in {self.Frame, self.Toplevel, self.Notebook, self.Canvas}:
-                self.current_frame = master(**kwargs)
+                self.current_frame = master(**frame_kwargs)
             elif isinstance(master, (tk.Toplevel, ttk.Notebook, tk.Frame, tk.Canvas)):
-                if kwargs:
-                    raise ValueError("Cannot use keyword arguments when setting an existing master instance.")
+                if frame_kwargs:
+                    raise ValueError("Cannot use `set_master` keyword arguments when passing an existing `master`.")
                 self.current_frame = master
             else:
-                raise TypeError("Master can only be set to a Toplevel, Notebook, Frame, or Canvas.")
+                raise TypeError("`master` can only be set to a Toplevel, Notebook, Frame, or Canvas.")
 
         previous_auto_row = self.current_row
         previous_auto_column = self.current_column
@@ -887,7 +1048,9 @@ class SmartFrame(tk.Frame):
                 self.grid_defaults = previous_grid_defaults
             self.current_frame = previous_frame
 
-    # INTERNAL METHODS
+    # endregion
+
+    # region Private Methods
 
     @staticmethod
     def _validate_entry_integers(new_value):
@@ -935,17 +1098,19 @@ class SmartFrame(tk.Frame):
                         raise KeyError(f"Invalid `SmartFrame.DEFAULT_BUTTON_KWARGS` key: {b}")
                 elif not isinstance(b, dict):
                     raise TypeError(
-                        f"If `button_kwargs` is a list or tuple, each element should be a string key to "
-                        f"`SmartFrame.DEFAULT_BUTTON_KWARGS` or a dictionary of `Button` kwargs, not {type(b)}."
+                        f"If `button_kwargs` is a sequence, each element should be a string key to "
+                        f"`SmartFrame.DEFAULT_BUTTON_KWARGS` or a dictionary of `Button` kwargs, not: {type(b)}"
                     )
             return button_kwargs
         elif not isinstance(button_kwargs, dict):
             raise TypeError(
-                f"`button_kwargs` should be a dictionary of `Button` kwargs, a list or tuple of such "
-                f"dictionaries (one per button name), or a string or list of strings that are keys to "
-                f"`SmartFrame.DEFAULT_BUTTON_KWARGS`, not {type(button_kwargs)}."
+                f"`button_kwargs` should be a dictionary of `Button` kwargs, a sequence of such dicts (one per button "
+                f"name), or a string or list of strings that are keys to `SmartFrame.DEFAULT_BUTTON_KWARGS`, not: "
+                f"{type(button_kwargs)}"
             )
         return button_kwargs
+
+    # endregion
 
 
 class SmartMenu(tk.Menu):
@@ -960,13 +1125,21 @@ class SmartMenu(tk.Menu):
                 self.style[style_key] = kwargs[style_key]
         super().__init__(*args, **kwargs)
 
+    def add_cascade(self, *args, **kwargs):
+        self._apply_style_kwargs(**kwargs)
+        super().add_cascade(*args, **kwargs)
+
+    def add_checkbutton(self, *args, **kwargs):
+        self._apply_style_kwargs(**kwargs)
+        super().add_checkbutton(*args, **kwargs)
+
     def add_command(self, *args, **kwargs):
         self._apply_style_kwargs(**kwargs)
         super().add_command(*args, **kwargs)
 
-    def add_cascade(self, *args, **kwargs):
+    def add_radiobutton(self, *args, **kwargs):
         self._apply_style_kwargs(**kwargs)
-        super().add_cascade(*args, **kwargs)
+        super().add_radiobutton(*args, **kwargs)
 
     def add_separator(self, *args, **kwargs):
         self._apply_style_kwargs(("bg",), **kwargs)
@@ -984,10 +1157,10 @@ class LoadingDialog(SmartFrame):
 
     def __init__(
         self,
-        master,
+        master: MASTER_TYPING,
         title="Loading...",
         message="",
-        font=None,
+        font: FONT_TYPING = None,
         style_defaults=None,
         **progressbar_kwargs,
     ):
@@ -1009,10 +1182,10 @@ class LoadingDialog(SmartFrame):
 class CustomDialog(SmartFrame):
     def __init__(
         self,
-        master,
+        master: MASTER_TYPING,
         title="Custom Dialog",
         message="",
-        font=None,
+        font: FONT_TYPING = None,
         button_names=(),
         button_kwargs=(),
         style_defaults=None,

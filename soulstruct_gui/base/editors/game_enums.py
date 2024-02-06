@@ -285,7 +285,7 @@ class EnumsEditor(BaseEditor):
 
     def select_entry_row_index(
         self,
-        row_index,
+        row_index: int | None,
         set_focus_to_text=True,
         edit_if_already_selected=True,
         id_clicked=False,
@@ -355,8 +355,13 @@ class EnumsEditor(BaseEditor):
 
         self.entry_i_frame.columnconfigure(0, weight=1)
         self.entry_i_frame.columnconfigure(1, weight=1)
-        if self.displayed_entry_count == 0:
-            self.select_entry_row_index(None)
+        # If invalid, active row is allowed to move back by ONE. Otherwise, it's deselected.
+        if self.active_row_index is not None:
+            if 0 < row == self.active_row_index:
+                self.select_entry_row_index(row - 1)
+            elif self.active_row_index > row:
+                self.select_entry_row_index(None)
+
         self._refresh_range_buttons()
 
     def _start_entry_description_edit(self, row_index):

@@ -169,7 +169,7 @@ class EventsEditor(SmartFrame):
             editor_i_frame.bind("<Configure>", lambda e, c=self.evs_editor_canvas: self.reset_canvas_scroll_region(c))
 
             self.text_editor = self.CustomWidget(
-                editor_i_frame,
+                frame=editor_i_frame,
                 custom_widget_class=EVSTkTextEditor,
                 set_style_defaults=("text", "cursor"),
                 width=300,

@@ -294,7 +294,7 @@ class TalkEditor(BaseEditor):
         editor_i_frame.bind("<Configure>", lambda e, c=self.esp_editor_canvas: self.reset_canvas_scroll_region(c))
 
         self.esp_editor = self.CustomWidget(
-            editor_i_frame,
+            frame=editor_i_frame,
             custom_widget_class=ESPTkTextEditor,
             set_style_defaults=("text", "cursor"),
             row=0,
@@ -591,8 +591,13 @@ class TalkEditor(BaseEditor):
         for remaining_row in range(row, len(self.entry_rows)):
             self.entry_rows[remaining_row].hide()
 
-        if self.displayed_entry_count == 0:
-            self.select_entry_row_index(None)  # TODO: select first index if present?
+        # If invalid, active row is allowed to move back by ONE. Otherwise, it's deselected.
+        if self.active_row_index is not None:
+            if 0 < row == self.active_row_index:
+                self.select_entry_row_index(row - 1)
+            elif self.active_row_index > row:
+                self.select_entry_row_index(None)
+
         self._refresh_range_buttons()
 
     def select_entry_id(self, entry_id, set_focus_to_text=False, edit_if_already_selected=True, as_row_index=None):
@@ -604,7 +609,12 @@ class TalkEditor(BaseEditor):
         )
 
     def select_entry_row_index(
-        self, row_index, set_focus_to_text=False, edit_if_already_selected=True, id_clicked=False, check_unsaved=True
+        self,
+        row_index: int | None,
+        set_focus_to_text=False,
+        edit_if_already_selected=True,
+        id_clicked=False,
+        check_unsaved=True,
     ):
         """Select entry from row index, based on currently displayed category and ID range."""
         old_row_index = self.active_row_index
@@ -677,9 +687,12 @@ class TalkEditor(BaseEditor):
         esp_text = self.esp_text[self.selected_map_id][entry_id]
         self._add_entry(entry_id=entry_id + offset, text=text, new_esp_string=esp_text)
 
-    def delete_entry(self, row_index, category=None):
+    def delete_entry(self, row_index: int | None, category=None, must_be_selected=False):
         """Deletes talk script file in project. Cannot be undone."""
         if row_index is None:
+            self.bell()
+            return
+        if must_be_selected and self.active_row_index is None or row_index != self.active_row_index:
             self.bell()
             return
         self._cancel_entry_id_edit()
@@ -701,7 +714,7 @@ class TalkEditor(BaseEditor):
         os.remove(str(esp_path))
         self.esp_text[self.selected_map_id].pop(talk_id)
         self.esp_file_paths[self.selected_map_id].pop(talk_id)
-        self.select_entry_row_index(None, check_unsaved=False)
+        self.select_entry_row_index(None, check_unsaved=False)  # we DO deselect entries in this subclass
         self.refresh_entries()
 
     def get_category_data(self, category=None) -> dict[int, str]:

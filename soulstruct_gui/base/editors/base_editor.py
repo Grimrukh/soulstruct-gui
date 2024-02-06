@@ -26,6 +26,8 @@ from soulstruct_gui.window import SmartFrame, ToolTip
 if tp.TYPE_CHECKING:
     from soulstruct_gui.base.core import GameDirectoryProject
     from soulstruct_gui.base.links import WindowLinker
+    from soulstruct_gui.typing import *
+    from soulstruct_gui.window import SmartMenu
 
 _LOGGER = logging.getLogger("soulstruct_gui")
 
@@ -40,6 +42,22 @@ class EntryRow:
     ENTRY_ID_FG = "#CDF"
     ENTRY_TEXT_WIDTH = 150
     ENTRY_TEXT_FG = "#FFF"
+
+    # region Instance Attributes
+    master: BaseEditor
+    STYLE_DEFAULTS: dict[str, str]
+    row_index: int
+    _entry_id: int | None
+    _entry_text: str | None
+    _active: bool
+    row_box: Frame
+    id_box: Frame | None
+    id_label: Label | None
+    text_box: Frame
+    text_label: Label
+    context_menu: SmartMenu
+    tooltip: ToolTip
+    # endregion
 
     def __init__(self, editor: BaseEditor, row_index: int, main_bindings: dict = None):
         self.master = editor
@@ -82,6 +100,7 @@ class EntryRow:
             bind_events(self.id_box, id_bindings)
             bind_events(self.id_label, id_bindings)
         else:
+            self.id_box = None
             self.id_label = None
 
         self.text_box = editor.Frame(row=row_index, column=1 if self.SHOW_ENTRY_ID else 0, bg=bg_color, sticky="ew")
@@ -224,6 +243,30 @@ class BaseEditor(SmartFrame, abc.ABC):
     # noinspection PyCallingNonCallable
     TRANSLATOR = Translator() if Translator is not None else None
 
+    # region Instance Attributes
+    _project: GameDirectoryProject
+    linker: WindowLinker
+    action_history: ActionHistory
+    view_history : ViewHistory
+    remembered_ids : dict[str | tuple[str, str], int]
+    unsaved_changes: set[tuple[str, int, str]]
+    map_choice: Combobox | None
+    active_category: str | None
+    category_boxes: dict[str, tuple[Frame, Label]]
+    category_canvas: Canvas | None
+    category_i_frame: Frame | None
+    entry_rows: list[EntryRow]
+    active_row_index: int | None
+    first_display_index: int
+    displayed_entry_count: int
+    entry_canvas: Canvas | None
+    entry_i_frame: Frame | None
+    previous_range_button: Button | None
+    next_range_button: Button | None
+    _e_entry_text_edit: Entry | None
+    _e_entry_id_edit: Entry | None
+    # endregion
+
     def __init__(
         self,
         project: GameDirectoryProject,
@@ -243,7 +286,7 @@ class BaseEditor(SmartFrame, abc.ABC):
         self.map_choice = None  # Combobox used by most tabs.
 
         self.active_category = None
-        self.category_boxes = {}
+        self.category_frames_labels = {}
         self.category_canvas = None
         self.category_i_frame = None
 
@@ -336,7 +379,7 @@ class BaseEditor(SmartFrame, abc.ABC):
                             "<Button-3>": lambda e, i=row: self._right_click_entry(e, i),
                             "<Up>": self._entry_press_up,
                             "<Down>": self._entry_press_down,
-                            "<Delete>": lambda e, i=row: self.delete_entry(i),
+                            "<Delete>": lambda e, i=row: self.delete_entry(i, must_be_selected=True),
                             "<Prior>": lambda e: self._go_to_previous_entry_range(),
                             "<Next>": lambda e: self._go_to_next_entry_range(),
                         },
@@ -389,7 +432,7 @@ class BaseEditor(SmartFrame, abc.ABC):
 
         if selected_category != self.active_category:
             self.active_category = selected_category
-            for category, (box, label) in self.category_boxes.items():
+            for category, (box, label) in self.category_frames_labels.items():
                 if selected_category == category:
                     box["bg"] = self.CATEGORY_SELECTED_BG
                     label["bg"] = self.CATEGORY_SELECTED_BG
@@ -398,7 +441,8 @@ class BaseEditor(SmartFrame, abc.ABC):
                     label["bg"] = self.CATEGORY_UNSELECTED_BG
 
         if auto_scroll:
-            view_ratio = list(self.category_boxes).index(self.active_category) / (len(self.category_boxes) + 1)
+            view_height = len(self.category_frames_labels) + 1
+            view_ratio = list(self.category_frames_labels).index(self.active_category) / view_height
             self.category_canvas.yview_moveto(view_ratio)
 
         self.first_display_index = first_display_index
@@ -448,16 +492,16 @@ class BaseEditor(SmartFrame, abc.ABC):
     def refresh_categories(self):
         """There are few enough categories changing rarely enough that the widgets can just be regenerated."""
         self.select_category(None)
-        for box, label in self.category_boxes.values():
-            box.destroy()
+        for frame, label in self.category_frames_labels.values():
+            frame.destroy()
             label.destroy()
-        self.category_boxes = {}
+        self.category_frames_labels = {}
         with self.set_master(self.category_i_frame):
 
             categories = self._get_display_categories()
 
             for row, category in enumerate(categories):
-                box = self.Frame(
+                frame = self.Frame(
                     row=row,
                     width=self.CATEGORY_BOX_WIDTH,
                     height=self.CATEGORY_ROW_HEIGHT,
@@ -474,7 +518,7 @@ class BaseEditor(SmartFrame, abc.ABC):
                     bg=self.CATEGORY_UNSELECTED_BG,
                     padx=5,
                 )
-                for widget in {label, box}:
+                for widget in (label, frame):
                     bind_events(
                         widget,
                         {
@@ -487,9 +531,9 @@ class BaseEditor(SmartFrame, abc.ABC):
                     )
                 if category == self.active_category:
                     label["bg"] = self.CATEGORY_SELECTED_BG
-                    box["bg"] = self.CATEGORY_SELECTED_BG
-                self.link_to_scrollable(self.category_canvas, box, label)
-                self.category_boxes[category] = (box, label)
+                    frame["bg"] = self.CATEGORY_SELECTED_BG
+                self.link_to_scrollable(self.category_canvas, frame, label)
+                self.category_frames_labels[category] = (frame, label)
 
         self.category_canvas.yview_moveto(0)
         self.category_i_frame.columnconfigure(0, weight=1)
@@ -532,7 +576,12 @@ class BaseEditor(SmartFrame, abc.ABC):
         )
 
     def select_entry_row_index(
-        self, row_index, set_focus_to_text=True, edit_if_already_selected=True, id_clicked=False, view_change=False
+        self,
+        row_index: int | None,
+        set_focus_to_text=True,
+        edit_if_already_selected=True,
+        id_clicked=False,
+        view_change=False,
     ):
         """Select entry from row index, based on currently displayed category and ID range.
 
@@ -574,9 +623,12 @@ class BaseEditor(SmartFrame, abc.ABC):
         self._cancel_entry_id_edit()
         self._cancel_entry_text_edit()
 
-        entries_to_display = self._get_category_name_range(
-            first_index=self.first_display_index, last_index=self.first_display_index + self.ENTRY_RANGE_SIZE,
-        )
+        if self.active_category is not None:
+            entries_to_display = self._get_category_name_range(
+                first_index=self.first_display_index, last_index=self.first_display_index + self.ENTRY_RANGE_SIZE,
+            )
+        else:
+            entries_to_display = []
 
         row = 0
         for entry_id, _ in entries_to_display:
@@ -588,8 +640,13 @@ class BaseEditor(SmartFrame, abc.ABC):
         for remaining_row in range(row, len(self.entry_rows)):
             self.entry_rows[remaining_row].hide()
 
-        if self.displayed_entry_count == 0:
-            self.select_entry_row_index(None)
+        # If invalid, active row is allowed to move back by ONE. Otherwise, it's deselected.
+        if self.active_row_index is not None:
+            if 0 < row == self.active_row_index:
+                self.select_entry_row_index(row - 1)
+            elif self.active_row_index > row:
+                self.select_entry_row_index(None)
+
         self._refresh_range_buttons()
 
     def change_entry_id(self, row_index, new_id, category=None, record_action=True):
@@ -782,17 +839,23 @@ class BaseEditor(SmartFrame, abc.ABC):
             text = self.get_entry_text(entry_id)  # Copies name of origin entry by default.
         self._add_entry(entry_id=new_id, text=text)
 
-    def delete_entry(self, row_index: int, category=None):
-        """Deletes entry and returns it (or False upon failure) so that the action manager can undo the deletion."""
+    def delete_entry(self, row_index: int | None, category=None, must_be_selected=False):
+        """Deletes entry and returns it (or False upon failure) so that the action manager can undo the deletion.
+
+        Selects the next entry if the deleted entry was selected.
+        """
         if row_index is None:
+            self.bell()
+            return
+        if must_be_selected and self.active_row_index is None or row_index != self.active_row_index:
             self.bell()
             return
         self._cancel_entry_id_edit()
         self._cancel_entry_text_edit()
         entry_id = self.get_entry_id(row_index)
         deleted_entry = self.get_category_data(category=category).pop(entry_id)
-        self.select_entry_row_index(None)
         self.refresh_entries()
+        # NOTE: We don't modify active row index. New entry row at that index will be selected if valid.
         return deleted_entry
 
     def _update_first_entry_display_index(self, new_entry_index, as_row_index=0):

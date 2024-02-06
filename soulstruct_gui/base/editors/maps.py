@@ -6,6 +6,7 @@ import abc
 import ast
 import logging
 import math
+import re
 import typing as tp
 from enum import IntEnum
 from types import ModuleType
@@ -36,6 +37,7 @@ if tp.TYPE_CHECKING:
     from soulstruct.base.maps.map_studio_directory import MapStudioDirectory
     from soulstruct.base.maps.msb import MSB, MSBEntryList, MSBEntry
     from soulstruct_gui.base.links import MapsLink
+    from soulstruct_gui.typing import *
 
 _LOGGER = logging.getLogger("soulstruct_gui")
 
@@ -109,7 +111,7 @@ class MapEntryRow(EntryRow):
         )
         self.context_menu.add_command(
             label="Duplicate Entry to Next Index",
-            command=lambda: self.master.add_relative_entry(self.entry_id),
+            command=lambda: self.master.add_relative_entry(self.entry_id, smart_rename=True),
         )
         msb_type, msb_subtype = self.master.active_category.split(": ")
         if msb_type == "Regions" or (msb_type == "Parts" and msb_subtype in {"Characters", "Objects", "PlayerStarts"}):
@@ -147,6 +149,11 @@ class MapFieldRow(FieldRow):
     CAMEL_CASE_NICKNAMES = False  # field nicknames already properly formatted for display
 
     master: MapsEditor
+
+    active_value_widget: Label | Checkbutton | Combobox | Frame
+    value_vector_x: Label
+    value_vector_y: Label
+    value_vector_z: Label
 
     def __init__(self, editor: MapsEditor, row_index: int, main_bindings: dict = None):
         """Represents, at any given time, the name and value (string representation) of an `MSBEntry` field."""
@@ -800,7 +807,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         row = 0
         for entry_id, _ in entries_to_display:
             self.entry_rows[row].update_entry(
-                entry_id, self.get_entry_text(entry_id), self.get_entry_description(entry_id)
+                entry_id, self.get_entry_text(entry_id), entry_tooltip=self.get_entry_description(entry_id)
             )
             self.entry_rows[row].unhide()
             row += 1
@@ -811,11 +818,15 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
 
         self.entry_i_frame.columnconfigure(0, weight=1)
         self.entry_i_frame.columnconfigure(1, weight=1)
-        if self.displayed_entry_count == 0:
-            self.select_entry_row_index(None)
-        self._refresh_range_buttons()
 
-        self.refresh_fields(reset_display=reset_field_display)
+        # If invalid, active row is allowed to move back by ONE. Otherwise, it's deselected.
+        if self.active_row_index is not None:
+            if 0 < row == self.active_row_index:
+                self.select_entry_row_index(row - 1)
+            elif self.active_row_index > row:
+                self.select_entry_row_index(None)
+
+        self._refresh_range_buttons()
 
     def on_map_choice(self, event=None):
         if self.global_map_choice_func and event is not None:
@@ -851,12 +862,49 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         # TODO: ActionHistory stuff?
         return True
 
-    def add_relative_entry(self, subtype_index: int, offset=1, text=None):
+    def add_relative_entry(self, subtype_index: int, offset=1, text=None, smart_rename=True):
         """Duplicate entry at `subtype_index` to index `subtype_index + offset`."""
         subtype_list = self._get_category_subtype_list()
         source_msb_entry = subtype_list[subtype_index]
         msb_entry = source_msb_entry.copy()
-        msb_entry.name = text if text is not None else source_msb_entry.name + " <COPY>"
+
+        new_name_set = False
+        if text is not None:
+            msb_entry.name = text
+            new_name_set = True
+        elif smart_rename:
+            # Find model ID (for models) or last number in name and increment it. Examples:
+            #   'c1000_0003' -> 'c1000_0004' (character)
+            #   'm2500B1' -> 'm2501B1' (model)
+            # Also replaces any occurrences of name in `sib_path` property, if present in entry.
+
+            if "Model" in msb_entry.__class__.__name__:
+                # Use `re` to find FIRST number in name.
+                match = re.search(r"(^\D*)(\d+)(.*$)", source_msb_entry.name)
+            else:
+                # Use `re` to find LAST number in name.
+                match = re.search(r"(.*)(\d+)(\D*$)", source_msb_entry.name)
+
+            if match:
+                new_n = int(match.group(2)) + 1
+                digits = len(match.group(2))
+                new_name = f"{match.group(1)}{new_n:>0{digits}}{match.group(3)}"
+                if new_name not in subtype_list.get_entry_names():
+                    msb_entry.name = new_name
+                    try:
+                        sib_path = getattr(msb_entry, "sib_path")
+                    except AttributeError:
+                        pass
+                    else:
+                        setattr(msb_entry, "sib_path", sib_path.replace(source_msb_entry.name, new_name))
+                else:
+                    # Fall back.
+                    msb_entry.name = source_msb_entry.name + " <COPY>"
+            else:
+                # Fall back.
+                msb_entry.name = source_msb_entry.name + " <COPY>"
+        else:
+            msb_entry.name = source_msb_entry.name + " <COPY>"
         return self._add_entry(subtype_index + offset, text=msb_entry.name, new_field_dict=msb_entry)
 
     def add_relative_entry_and_copy_player_transform(
@@ -872,9 +920,12 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         msb_entry = subtype_list.default_entry()
         return self._add_entry(entry_index, text=msb_entry.name, new_field_dict=msb_entry)
 
-    def delete_entry(self, row_index: int, category=None) -> MSBEntry | None:
+    def delete_entry(self, row_index: int | None, category=None, must_be_selected=False) -> MSBEntry | None:
         """Deletes entry and returns it (or False upon failure) so that the action manager can undo the deletion."""
         if row_index is None:
+            self.bell()  # no row selected
+            return
+        if must_be_selected and self.active_row_index is None or row_index != self.active_row_index:
             self.bell()
             return
 
@@ -883,8 +934,8 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         # Row index and subtype index may be different if displayed row range does not start at zero.
         entry_subtype_index = self.get_entry_id(row_index)
         deleted_entry = subtype_list.pop(entry_subtype_index)
-        self.select_entry_row_index(None)
         self.refresh_entries()
+        # NOTE: We don't modify active row index. New entry row at that index will be selected if valid.
         return deleted_entry
 
     def copy_python_constructor_text(self, row_index: int, category=None):

@@ -21,6 +21,9 @@ from soulstruct_gui.window import ToolTip
 
 if tp.TYPE_CHECKING:
     from soulstruct_gui.base.core import GameDirectoryProject
+    from soulstruct_gui.base.links import BaseLink
+    from soulstruct_gui.typing import *
+    from soulstruct_gui.window import SmartMenu
 
 _LOGGER = logging.getLogger("soulstruct_gui")
 
@@ -38,6 +41,30 @@ class FieldRow:
     """
 
     CAMEL_CASE_NICKNAMES = True
+
+    # region Instance Attributes
+    master: BaseFieldEditor
+    STYLE_DEFAULTS: dict[str, str]
+    row_index: int
+    _active: bool
+    _link_missing: bool
+    field_name: str
+    field_type: FieldTypeTyping
+    field_nickname: str
+    field_docstring: str
+    field_links: list[BaseLink]
+    link_missing: bool
+    row_box: Frame
+    field_name_box: Frame
+    field_name_label: Label
+    value_box: Frame
+    value_label: Label
+    value_checkbutton: Checkbutton
+    value_combobox: Combobox
+    context_menu: SmartMenu
+    tooltip: ToolTip
+    active_value_widget: Label | Checkbutton | Combobox
+    # endregion
 
     def __init__(self, editor: BaseFieldEditor, row_index: int, main_bindings: dict = None):
         self.master = editor
@@ -570,7 +597,7 @@ class BaseFieldEditor(BaseEditor, abc.ABC):
 
         if selected_category != self.active_category:
             self.active_category = selected_category
-            for category, (box, label) in self.category_boxes.items():
+            for category, (box, label) in self.category_frames_labels.items():
                 if selected_category == category:
                     box["bg"] = self.CATEGORY_SELECTED_BG
                     label["bg"] = self.CATEGORY_SELECTED_BG
@@ -580,7 +607,8 @@ class BaseFieldEditor(BaseEditor, abc.ABC):
                     label["bg"] = self.CATEGORY_UNSELECTED_BG
 
         if auto_scroll:
-            view_ratio = list(self.category_boxes).index(self.active_category) / (len(self.category_boxes) + 1)
+            view_height = len(self.category_frames_labels) + 1
+            view_ratio = list(self.category_frames_labels).index(self.active_category) / view_height
             self.category_canvas.yview_moveto(view_ratio)
 
         self.first_display_index = first_display_index
@@ -607,7 +635,12 @@ class BaseFieldEditor(BaseEditor, abc.ABC):
         self.refresh_fields(reset_display=reset_field_display)
 
     def select_entry_row_index(
-        self, row_index, set_focus_to_text=True, edit_if_already_selected=True, id_clicked=False, view_change=False
+        self,
+        row_index: int | None,
+        set_focus_to_text=True,
+        edit_if_already_selected=True,
+        id_clicked=False,
+        view_change=False,
     ):
         super().select_entry_row_index(
             row_index,
