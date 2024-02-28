@@ -12,7 +12,6 @@ from soulstruct_gui.base.editors.maps import MapsEditor as BaseMapsEditor
 class MapsEditor(BaseMapsEditor):
 
     GAME_TYPES_MODULE = game_types
-    GROUP_BIT_COUNT = MSBPart.GROUP_BIT_COUNT
 
     def get_field_links(self, field_type, field_value, valid_null_values=None) -> list:
         if field_type == ObjActParam and field_value == -1:

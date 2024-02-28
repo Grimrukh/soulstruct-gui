@@ -120,7 +120,7 @@ class EntryRow:
         self.context_menu = editor.Menu(self.row_box)
 
         self.tooltip = ToolTip(
-            self.row_box, self.id_box, self.id_label, self.text_box, self.text_label, text=None, wraplength=350
+            self.row_box, self.id_box, self.id_label, self.text_box, self.text_label, text=None, wraplength=500
         )
 
     def update_entry(self, entry_id: int, entry_text: str):
@@ -543,9 +543,7 @@ class BaseEditor(SmartFrame, abc.ABC):
         """Returns white text by default. Override to add custom colors based on category name."""
         return "#FFF" if category else "#000"
 
-    # ------------------- #
-    #   ENTRY SELECTION   #
-    # ------------------- #
+    # region Entry Selection
 
     def get_entry_id(self, row_index: int = None) -> int:
         """Retrieves true entry ID from the displayed row index (which is relative to `.first_display_index`).
@@ -563,14 +561,15 @@ class BaseEditor(SmartFrame, abc.ABC):
 
         Never counts as a view change (more primitive method `select_entry_row_index` can, though).
         """
-        if as_row_index is None:
-            # Default value is 5 if no newlines are in the target entry and 1 if there are.
-            as_row_index = 1 if "\n" in self.get_entry_text(entry_id) else 5
-
         entry_index = self.get_entry_index(entry_id)
+
+        if as_row_index is None:
+            # Take entry index modulo range size to get display row index of selected entry.
+            as_row_index = entry_index % self.ENTRY_RANGE_SIZE
+
         row_index = self._update_first_entry_display_index(entry_index, as_row_index=as_row_index)
         self.refresh_entries()
-        self.entry_canvas.yview_moveto(0)
+        self.entry_canvas.yview_moveto(as_row_index / self.displayed_entry_count)
         self.select_entry_row_index(
             row_index, set_focus_to_text=set_focus_to_text, edit_if_already_selected=edit_if_already_selected
         )
@@ -857,6 +856,8 @@ class BaseEditor(SmartFrame, abc.ABC):
         self.refresh_entries()
         # NOTE: We don't modify active row index. New entry row at that index will be selected if valid.
         return deleted_entry
+
+    # endregion
 
     def _update_first_entry_display_index(self, new_entry_index, as_row_index=0):
         """Updates first display index so that 'new_entry_index' becomes displayed index 'as_row_index' (or as close

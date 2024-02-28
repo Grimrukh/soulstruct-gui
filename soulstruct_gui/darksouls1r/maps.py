@@ -4,15 +4,16 @@ __all__ = ["MapsEditor"]
 
 from soulstruct.darksouls1r import game_types
 from soulstruct.darksouls1r.game_types import ObjActParam, PlaceName, BaseDrawParam
-from soulstruct.darksouls1ptde.maps.parts import MSBPart
+from soulstruct.darksouls1ptde.maps.parts import MSBPart, MSBCollision
 
 from soulstruct_gui.base.editors.maps import MapsEditor as BaseMapsEditor
+from soulstruct_gui.darksouls1ptde.maps import MapConnectionCreator, MapEntryRow
 
 
 class MapsEditor(BaseMapsEditor):
 
     GAME_TYPES_MODULE = game_types
-    GROUP_BIT_COUNT = MSBPart.GROUP_BIT_COUNT
+    ENTRY_ROW_CLASS = MapEntryRow
 
     def get_field_links(self, field_type, field_value, valid_null_values=None) -> list:
         if field_type == ObjActParam and field_value == -1:
@@ -39,3 +40,20 @@ class MapsEditor(BaseMapsEditor):
         return self.linker.soulstruct_link(
             field_type, field_value, valid_null_values=valid_null_values, map_override=map_override,
         )
+
+    def create_map_connection(self, entry_id: int):
+        """Create a `MapConnection` from the given `Collision` via a user pop-up."""
+        collisions = self._get_category_subtype_list()
+        collision = collisions[entry_id]  # type: MSBCollision
+        map_connection = MapConnectionCreator(collision, self.maps.ALL_MAPS, master=self).go()
+        if map_connection:
+            msb = self.get_selected_msb()
+            existing_map_connection_names = msb.map_connections.get_entry_names()
+            if map_connection.name in existing_map_connection_names:
+                self.error_dialog(
+                    "Map Connection Name Conflict",
+                    f"A Map Connection with the name '{map_connection.name}' already exists in this MSB. Try deleting "
+                    f"or editing that entry.",
+                )
+            else:
+                msb.map_connections.append(map_connection)

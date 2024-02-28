@@ -14,6 +14,7 @@ from types import ModuleType
 from soulstruct.exceptions import InvalidFieldValueError
 from soulstruct.base.game_types import GAME_TYPE, GAME_INT_TYPE, GameObjectInt, GameObjectIntSequence
 from soulstruct.base.game_types.map_types import *
+from soulstruct.base.maps.msb import MSB, MSBEntry
 from soulstruct.base.maps.msb.enums import MSBSupertype, BaseMSBModelSubtype, BaseMSBRegionSubtype
 from soulstruct.base.maps.msb.models import BaseMSBModel
 from soulstruct.base.maps.msb.utils import GroupBitSet, GroupBitSet128, GroupBitSet256, GroupBitSet1024
@@ -29,13 +30,14 @@ from soulstruct_gui.base.utilities import (
     EntryTextEditBox,
     SequenceNameEditBox,
     GroupBitSetEditBox,
+    NumberAndNameSelectionBox,
 )
 from soulstruct_gui.base.editors.base_editor import EntryRow
 from soulstruct_gui.base.editors.field_editor import BaseFieldEditor, FieldRow
 
 if tp.TYPE_CHECKING:
     from soulstruct.base.maps.map_studio_directory import MapStudioDirectory
-    from soulstruct.base.maps.msb import MSB, MSBEntryList, MSBEntry
+    from soulstruct.base.maps.msb import MSBEntryList
     from soulstruct_gui.base.links import MapsLink
     from soulstruct_gui.typing import *
 
@@ -56,7 +58,7 @@ ENTRY_LIST_FG_COLORS = {
 class MapEntryRow(EntryRow):
     """Entry rows for Maps have no ID (`entry_id` is a list index in that MSB category).
 
-    They also display their Entity ID field if they have a non-default value.
+    They also display their Entity ID field after the entry name if it is a non-default value.
     """
 
     master: MapsEditor
@@ -64,43 +66,43 @@ class MapEntryRow(EntryRow):
     ENTRY_ID_WIDTH = 5
     EDIT_ENTRY_ID = False
 
-    def __init__(self, editor: MapsEditor, row_index: int, main_bindings: dict = None):
-        super().__init__(editor=editor, row_index=row_index, main_bindings=main_bindings)
-
     def update_entry(self, entry_index: int, entry_text: str, entry_tooltip: str = ""):
         """Update the data currently presented in this `MapEntryRow`."""
         self.entry_id = entry_index
         entry_data = self.master.get_category_data()[entry_index]  # type: MSBEntry
-        text_label_fg = "#FFF"  # white
-        if hasattr(entry_data, "entity_id"):
-            text_tail = f"  {{ID: {entry_data.entity_id}}}" if entry_data.entity_id not in {-1, 0} else ""
-            if text_tail:
-                text_label_fg = "#FDA"  # orange
-        elif isinstance(entry_data, BaseMSBModel) and entry_data.SUBTYPE_ENUM.name in {"Character", "Player"}:
-            try:
-                model_id = int(entry_text.lstrip("c"))
-            except ValueError:
-                text_tail = ""
-            else:
-                try:
-                    text_tail = f"  {{{self.master.character_models[model_id]}}}"
-                except KeyError:
-                    text_tail = "  {UNKNOWN}"
-        else:
-            text_tail = ""
-
-        if entry_tooltip:
-            self.tooltip.text = entry_tooltip
-        else:
-            self.tooltip.text = None
+        self.tooltip.text = entry_tooltip if entry_tooltip else None
         self._entry_text = entry_text
-        self.text_label.var.set(entry_text + text_tail)
+
+        text_label, text_label_fg = self._get_entry_text_and_fg(entry_data, entry_text)
+        self.text_label.var.set(text_label)
         self.text_label["fg"] = text_label_fg
+
+        self._update_colors()
         self.build_entry_context_menu()
         self.unhide()
 
+    def _get_entry_text_and_fg(self, entry_data: MSBEntry, entry_text: str) -> tuple[str, str]:
+        """Get entry text and foreground color based on entry data and text."""
+        if hasattr(entry_data, "entity_id"):
+            if entry_data.entity_id in {-1, 0}:
+                return entry_text, "#FFF"  # white
+            return f"{entry_text}  {{ID: {entry_data.entity_id}}}", "#FDA"  # orange
+
+        if isinstance(entry_data, BaseMSBModel) and entry_data.SUBTYPE_ENUM.name in {"CharacterModel", "PlayerModel"}:
+            try:
+                model_id = int(entry_text.lstrip("c"))
+            except ValueError:
+                return entry_text, "#FFF"  # white
+            try:
+                return f"{entry_text}  {{{self.master.character_models[model_id]}}}", "#FFF"
+            except KeyError:
+                return f"{entry_text}  {{UNKNOWN}}", "#FFF"
+
+        return entry_text, "#FFF"
+
     def build_entry_context_menu(self):
         self.context_menu.delete(0, "end")
+
         self.context_menu.add_command(
             label="Edit in Floating Box (Shift + Click)",
             command=lambda: self.master.popout_entry_text_edit(self.row_index),
@@ -113,6 +115,7 @@ class MapEntryRow(EntryRow):
             label="Duplicate Entry to Next Index",
             command=lambda: self.master.add_relative_entry(self.entry_id, smart_rename=True),
         )
+
         msb_type, msb_subtype = self.master.active_category.split(": ")
         if msb_type == "Regions" or (msb_type == "Parts" and msb_subtype in {"Characters", "Objects", "PlayerStarts"}):
             copy_fields = ("translate", "rotate")
@@ -124,6 +127,7 @@ class MapEntryRow(EntryRow):
                 self.entry_id, **{f: True for f in copy_fields}
             ),
         )
+
         self.context_menu.add_command(
             label="Create New Entry at Next Index",
             command=lambda: self.master.add_new_default_entry(self.entry_id + 1),
@@ -135,6 +139,11 @@ class MapEntryRow(EntryRow):
         self.context_menu.add_command(
             label="Delete Entry",
             command=lambda: self.master.delete_entry(self.row_index),
+        )
+
+        self.context_menu.add_command(
+            label="Move to Other Map",
+            command=lambda: self.master.move_entry_to_other_map(self.row_index),
         )
 
         # For converting to Python scripting.
@@ -394,8 +403,7 @@ class MapFieldRow(FieldRow):
         categories = {}  # type: dict[str, list[str]]
         for entry in entries:
             display_name = entry.name
-
-            if self.master.character_models and entry.SUBTYPE_ENUM.name in ("CharacterModel", "PlayerModel"):
+            if self.master.character_models and entry.SUBTYPE_ENUM.name in {"CharacterModel", "PlayerModel"}:
                 model_id = int(entry.name.lstrip("c"))
                 display_name += f"  {{{self.master.character_models.get(model_id, 'UNKNOWN')}}}"
             categories.setdefault(entry.SUBTYPE_ENUM.pluralized_name, []).append(display_name)
@@ -700,7 +708,10 @@ class MapFieldRow(FieldRow):
             widget["bg"] = bg_color
 
 
-class MapsEditor(BaseFieldEditor, abc.ABC):
+MSB_TYPE = tp.TypeVar("MSB_TYPE", bound=MSB)
+
+
+class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     DATA_NAME = "Maps"
     TAB_NAME = "maps"
     CATEGORY_BOX_WIDTH = 400
@@ -845,9 +856,9 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
             if category is None:
                 raise ValueError("Cannot get MSB subtype entry list without `category` if `active_category` is None.")
         try:
-            supertype_name, subtype_name = self.active_category.split(": ")
+            supertype_name, subtype_name = category.split(": ")
         except ValueError:
-            raise ValueError(f"MSB category name was not in '[supertype]: [subtype]' format: {self.active_category}")
+            raise ValueError(f"MSB category name was not in '[supertype]: [subtype]' format: {category}")
         return self.get_selected_msb()[subtype_name]
 
     def _add_entry(self, subtype_index: int, text: str, category=None, new_field_dict: MSBEntry = None):
@@ -868,10 +879,8 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         source_msb_entry = subtype_list[subtype_index]
         msb_entry = source_msb_entry.copy()
 
-        new_name_set = False
         if text is not None:
             msb_entry.name = text
-            new_name_set = True
         elif smart_rename:
             # Find model ID (for models) or last number in name and increment it. Examples:
             #   'c1000_0003' -> 'c1000_0004' (character)
@@ -937,6 +946,68 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         self.refresh_entries()
         # NOTE: We don't modify active row index. New entry row at that index will be selected if valid.
         return deleted_entry
+
+    def move_entry_to_other_map(
+        self, row_index: int, new_map_name: str = None, new_entry_index: int = None, category: str | None = None,
+    ):
+        """Move entry to another map."""
+        self._cancel_entry_text_edit()
+
+        category = category or self.active_category
+        if not category:
+            self.error_dialog("Cannot Move Entry", "No map entry category is currently selected.")
+            return
+
+        if not new_map_name:
+            # Pop-up to get new map name.
+            map_display_names = [
+                f"{game_map.msb_file_stem} [{game_map.verbose_name}]"
+                for game_map in self.maps.ALL_MAPS
+                if game_map.msb_file_stem and game_map.msb_file_stem != self.map_choice_stem
+            ]
+            entry_id_and_new_map_name = NumberAndNameSelectionBox(
+                master=self,
+                names=map_display_names,
+                initial_number=-1,
+                number_prompt="Choose new entry ID:",
+                name_prompt="Choose a Map:",
+                list_name="Maps",
+                split_string=" "
+            ).go()
+            if not entry_id_and_new_map_name:
+                return
+            entry_id, new_map_name = entry_id_and_new_map_name
+            if new_entry_index is None:
+                new_entry_index = entry_id  # could still be None (end of list)
+
+        if new_map_name == self.map_choice_stem:
+            self.error_dialog("Cannot Move Entry", f"Cannot move entry to the same map ({new_map_name}).")
+            return
+
+        source_msb = self.get_selected_msb()
+        try:
+            dest_msb_name = self.maps.GET_MAP(new_map_name).name
+            dest_msb = self.maps[dest_msb_name]
+        except (ValueError, KeyError):
+            self.error_dialog("Cannot Move Entry", f"Map {new_map_name} does not exist or is invalid.")
+            return
+
+        try:
+            supertype_name, subtype_name = category.split(": ")
+        except ValueError:
+            self.error_dialog("Cannot Move Entry", f"Invalid category name: {category}")
+            return
+
+        source_entry_list = source_msb[subtype_name]  # type: MSBEntryList
+        dest_entry_list = dest_msb[subtype_name]  # type: MSBEntryList
+
+        entry_id = self.get_entry_id(row_index)
+        entry = source_entry_list.pop(entry_id)
+        if new_entry_index is not None and new_entry_index >= 0:
+            dest_entry_list.insert(new_entry_index, entry)
+        else:
+            dest_entry_list.append(entry)
+        self.refresh_entries()
 
     def copy_python_constructor_text(self, row_index: int, category=None):
         """Copies valid string representation of given entry to clipboard."""
@@ -1069,17 +1140,22 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
             self._cancel_field_value_edit()
 
     def change_field_value(self, field_name: str, new_value):
-        field_dict = self.get_selected_field_dict()
-        old_value = field_dict[field_name]
+        msb_entry = self.get_selected_field_dict()  # type: MSBEntry
+        old_value = msb_entry[field_name]
         if self.e_coord:
             old_value = getattr(old_value, self.e_coord)
-        if old_value == new_value:
+
+        # We check `MSBEntry` equality by ID (as identical entries may appear in different maps, e.g. models).
+        if isinstance(new_value, MSBEntry) and id(old_value) == id(new_value):
+            return False  # Nothing to change.
+        if not isinstance(new_value, MSBEntry) and old_value == new_value:
             return False  # Nothing to change.
         try:
             if self.e_coord:
-                setattr(field_dict[field_name], self.e_coord, new_value)
+                # Set just specified coordinate of existing field value vector.
+                setattr(msb_entry[field_name], self.e_coord, new_value)
             else:
-                field_dict[field_name] = new_value
+                msb_entry[field_name] = new_value
         except InvalidFieldValueError as e:
             self.bell()
             self.CustomDialog(title="Field Value Error", message=str(e))
@@ -1140,7 +1216,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
                 categories.append(f"{msb_supertype}: {subtype_enum.pluralized_name}")
         return categories
 
-    def get_selected_msb(self) -> MSB:
+    def get_selected_msb(self) -> MSB_TYPE:
         map_name = self.maps.GET_MAP(self.map_choice_stem).name
         return self.maps[map_name]
 
@@ -1191,7 +1267,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC):
         nickname, tooltip, display_type = field_dict.get_field_display_info(field_name, self.GAME_TYPES_MODULE)
         return nickname, field_name not in field_dict.HIDE_FIELDS, display_type, tooltip
 
-    def get_field_names(self, field_dict: MSBEntry) -> tuple[str]:
+    def get_field_names(self, field_dict: MSBEntry) -> tuple[str, ...]:
         """NOTE: Includes hidden fields (which are filtered by caller if option set)."""
         return field_dict.get_field_names() if field_dict else ()
 

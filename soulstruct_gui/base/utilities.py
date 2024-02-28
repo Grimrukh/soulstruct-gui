@@ -12,6 +12,7 @@ __all__ = [
     "ItemTextEditBox",
     "SequenceNameEditBox",
     "GroupBitSetEditBox",
+    "NumberAndNameSelectionBox",
     "ActionHistory",
     "ViewHistory",
     "bind_events",
@@ -324,8 +325,8 @@ class NameSelectionBox(SmartFrame):
 
     output: str | None  # name
 
-    def __init__(self, master, names, list_name="List", split_string=""):
-        super().__init__(toplevel=True, master=master, window_title=f"Select Entry from {list_name}")
+    def __init__(self, master, names: tp.Sequence[str], list_name="List", split_string=""):
+        super().__init__(master=master, toplevel=True, window_title=f"Select Entry from {list_name}")
 
         self.output = None
         self.split_string = split_string
@@ -883,3 +884,66 @@ class GroupBitSetEditBox(SmartFrame):
         checkbutton = self._checkbuttons[i]
         value = checkbutton.var.get()
         checkbutton.config(fg="#FFF" if value else "#555")
+
+
+class NumberAndNameSelectionBox(SmartFrame):
+    """Small pop-out widget that allows you to select a name from some list and enter an integer number."""
+
+    WIDTH = 50  # characters
+    HEIGHT = 20  # lines
+
+    output: tuple[int | None, str] | None  # name and number
+
+    def __init__(
+        self,
+        master,
+        names: list[str],
+        initial_number: int = None,
+        list_name="List",
+        split_string="",
+        number_prompt="Enter a number:",
+        name_prompt="Double-click an entry to select it:",
+    ):
+        super().__init__(master=master, toplevel=True, window_title=f"Select Entry from {list_name}")
+
+        self.output = None
+        self.split_string = split_string
+
+        with self.set_master(padx=20, pady=20, auto_rows=0, grid_defaults={"pady": 10}):
+            self.Label(text=number_prompt)
+            self._number = self.Entry(initial_text=str(initial_number), width=self.WIDTH, integers_only=True)
+            self.Label(text=name_prompt)
+            self._names = self.Listbox(
+                values=names,
+                width=self.WIDTH,
+                height=self.HEIGHT,
+                vertical_scrollbar=True,
+                selectmode="single",
+                font=("Consolas", 14),
+                padx=20,
+                pady=20,
+            )
+
+        self._names.bind("<Double-Button-1>", lambda e: self.done(True))
+
+        self.bind_all("<Escape>", lambda e: self.done(False))
+        self.protocol("WM_DELETE_WINDOW", lambda: self.done(False))
+        self.resizable(width=False, height=False)
+        self.set_geometry(relative_position=(0.5, 0.3), transient=True)
+
+    def go(self):
+        self.wait_visibility()
+        self.grab_set()
+        self.mainloop()
+        self.destroy()
+        return self.output
+
+    def done(self, confirm=True):
+        if confirm:
+            number_str = self._number.var.get()
+            number = int(number_str) if number_str else None
+            name = self._names.get(self._names.curselection())
+            if self.split_string:
+                name = name.split(self.split_string)[0]
+            self.output = (number, name)
+        self.quit()
