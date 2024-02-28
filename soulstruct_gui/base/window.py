@@ -1047,6 +1047,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
             if not export_directory:
                 return  # Abort export.
 
+        if data_type == ProjectDataType.Enums:
+            data_type = ProjectDataType.Maps  # TODO: 'Enums' are just a view on 'Maps' at the moment
+
         if single_script_only:
             if data_type == ProjectDataType.Events:
                 # Specifying 'events' here means the selected script only.

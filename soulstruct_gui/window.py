@@ -577,7 +577,7 @@ class SmartFrame(tk.Frame):
     @embed_component
     def Button(
         self,
-        command: tp.Callable[[], None],
+        command: tp.Callable[[], tp.Any],
         frame: MASTER_TYPING = None,
         text: str = None,
         text_padx: int = None,

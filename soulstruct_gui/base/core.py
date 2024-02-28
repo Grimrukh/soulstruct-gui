@@ -324,7 +324,9 @@ class GameDirectoryProject(abc.ABC):
         return data, self.get_data_game_path(data_type, root=Path(export_directory))
 
     def export_all(self, export_directory: Path | str):
-        for data_type in self.DATA_TYPES:
+        for data_type, data_type_class in self.DATA_TYPES.items():
+            if not data_type_class:
+                continue  # cannot be export (e.g. 'Enums')
             export_func = getattr(self, f"export_{data_type.name}")
             export_func(export_directory)
 
@@ -370,6 +372,10 @@ class GameDirectoryProject(abc.ABC):
         else:
             maps.write(export_path)
         self._write_config()
+
+    def export_Enums(self, export_directory: Path | str, specific_map=""):
+        """TODO: Currently just exports Maps."""
+        self.export_Maps(export_directory, specific_map)
 
     def export_Params(self, export_directory: Path | str, specific_param=""):
         params, export_path = self._get_data_and_export_path(ProjectDataType.Params, export_directory)
@@ -472,6 +478,10 @@ class GameDirectoryProject(abc.ABC):
         else:
             maps.write_json_directory(self.project_root / "maps")
         self._write_config()
+
+    def save_Enums(self, specific_map=""):
+        """TODO: Currently just saves Maps."""
+        self.save_Maps(specific_map)
 
     def save_Params(self, specific_param=""):
         params = self._get_data(ProjectDataType.Params)  # type: GameParamBND
@@ -655,9 +665,11 @@ class GameDirectoryProject(abc.ABC):
             raise KeyError(f"Could not get data path to {data_type} ({data_class_name}) for game {game.name}")
 
     # region Process/Backup Utilities
-    def export_timestamped_backup(self, data_type=None):
+    def export_timestamped_backup(self, data_type: ProjectDataType = None):
         """TODO: Not used anywhere at the moment."""
         timestamped_dir = self.project_root / "export" / self._get_timestamp(for_path=True)
+        if data_type == ProjectDataType.Enums:
+            data_type = ProjectDataType.Maps  # TODO: 'Enums' are just a view on 'Maps' at the moment
         export_func = getattr(self, f"export_{data_type}")
         export_func(timestamped_dir)
 

@@ -210,6 +210,14 @@ class EventsEditor(SmartFrame):
                 tooltip_text="Reload script from project. Unsaved changes to current script will be lost. (Ctrl + R)",
             )
             self.Button(
+                text="Reload & Compile",
+                width=17,
+                padx=5,
+                command=self.reload_and_compile,
+                tooltip_text="Reload script from project, then compile it to test syntax. Text will flash blue if test "
+                             "is successful.",
+            )
+            self.Button(
                 text="Reload & Export",
                 width=17,
                 padx=5,
@@ -303,7 +311,7 @@ class EventsEditor(SmartFrame):
         for tag in {"found", "error"}:
             self.text_editor.tag_remove(tag, "1.0", "end")
 
-    def _ignored_unsaved(self):
+    def _ignored_unsaved(self) -> bool:
         if self._get_current_text() != self.evs_text[self.selected_map_id]:
             if (
                 self.CustomDialog(
@@ -414,9 +422,9 @@ class EventsEditor(SmartFrame):
             )
         emevd.write(export_directory / f"event/{self.selected_map_id}.emevd")
 
-    def reload_selected(self, mimic_click=False, flash_bg=True):
+    def reload_selected(self, mimic_click=False, flash_bg=True) -> bool:
         if not self.selected_map_id:
-            return
+            return False
         if mimic_click:
             self.mimic_click(self.reload_button)
         if self._ignored_unsaved():
@@ -429,10 +437,17 @@ class EventsEditor(SmartFrame):
             self.text_editor.color_syntax()
             if flash_bg:
                 self.flash_bg(self.text_editor, "#242")
+            return True
+        return False
 
     def save_and_export(self):
         self.save_selected_evs()
         self.export_selected_evs(self.game_root)
+
+    def reload_and_compile(self):
+        if not self.reload_selected():
+            return
+        self._compile_selected()
 
     def reload_and_export(self):
         self.reload_selected()
