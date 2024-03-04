@@ -948,7 +948,12 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
         return deleted_entry
 
     def move_entry_to_other_map(
-        self, row_index: int, new_map_name: str = None, new_entry_index: int = None, category: str | None = None,
+        self,
+        row_index: int,
+        new_map_name: str = None,
+        new_entry_index: int = None,
+        category: str | None = None,
+        reattach_entry_references=True,
     ):
         """Move entry to another map."""
         self._cancel_entry_text_edit()
@@ -1007,6 +1012,15 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             dest_entry_list.insert(new_entry_index, entry)
         else:
             dest_entry_list.append(entry)
+
+        if reattach_entry_references:
+            try:
+                dest_msb.reattach_entry_references(entry)
+            except KeyError as ex:
+                self.error_dialog(
+                    "Cannot Reattach Entry References", f"Error occurred while reattaching entry references:\n\n{ex}"
+                )
+
         self.refresh_entries()
 
     def copy_python_constructor_text(self, row_index: int, category=None):
