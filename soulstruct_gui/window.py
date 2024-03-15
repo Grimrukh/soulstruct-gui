@@ -286,10 +286,12 @@ class SmartFrame(tk.Frame):
         # Create class-level checkbutton images, if missing.
         if self._ON_IMAGE is None:
             self.__class__._ON_IMAGE = tk.PhotoImage(width=48, height=24)
-            self.__class__._ON_IMAGE.put(("#4F4",), to=(24, 0, 47, 23))
+            self.__class__._ON_IMAGE.put(("#000",), to=(0, 0, 48, 24))  # black
+            self.__class__._ON_IMAGE.put(("#4F4",), to=(24, 0, 47, 23))  # green (right)
         if self._OFF_IMAGE is None:
             self.__class__._OFF_IMAGE = tk.PhotoImage(width=48, height=24)
-            self.__class__._OFF_IMAGE.put(("#D66",), to=(0, 0, 23, 23))
+            self.__class__._OFF_IMAGE.put(("#000",), to=(0, 0, 48, 24))  # black
+            self.__class__._OFF_IMAGE.put(("#D66",), to=(0, 0, 23, 23))  # red (left)
 
         # Current frame tracked, defaults to master frame.
         self.master_frame = self.current_frame = self.Frame(
@@ -656,7 +658,7 @@ class SmartFrame(tk.Frame):
     def Combobox(
         self,
         frame: MASTER_TYPING = None,
-        values: list[str] = None,
+        values: list[str] | tuple[str, ...] = None,
         initial_value: str = None,
         readonly=True,
         width=20,

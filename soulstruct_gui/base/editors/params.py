@@ -10,8 +10,8 @@ __all__ = [
 import logging
 import typing as tp
 
-from soulstruct.base.game_types import BaseParam, GAME_INT_TYPE
-from soulstruct.base.params import Param, ParamRow, ParamFieldMetadata
+from soulstruct.base.game_types import BaseParam
+from soulstruct.base.params import PARAM_GAME_TYPE, Param, ParamRow, ParamFieldMetadata
 from soulstruct.base.params.utilities import ParamFieldComparisonType, ParamFieldSearchCondition, find_param_rows
 
 from soulstruct_gui.base.editors.base_editor import EntryRow
@@ -173,7 +173,7 @@ class ParamsEditor(BaseFieldEditor):
         if self.active_category is None:
             self.CustomDialog("No Param Selected", "No Param category has been selected.")
             return
-        param = self.params[self.active_category]
+        param = self.params.get_param(self.active_category)
         param_finder = ParamFinder(self, param, param_name=self.active_category, initial_conditions=self.row_conditions)
         new_conditions = param_finder.go()
         if new_conditions is not None:
@@ -316,18 +316,18 @@ class ParamsEditor(BaseFieldEditor):
                 raise ValueError("No params category selected.")
         return self.params.get_param(category)[entry_id]
 
-    def get_field_display_info(self, field_dict: ParamRow, field_name) -> tuple[str, bool, GAME_INT_TYPE, str]:
+    def get_field_display_info(self, field_dict: ParamRow, field_name: str) -> tuple[str, bool, PARAM_GAME_TYPE, str]:
         field_metadata = field_dict.get_field_metadata(field_name)  # type: ParamFieldMetadata
         if field_metadata.dynamic_callback:
             # Type, suffix, and tooltip of this field depend upon the value of one or more other fields (e.g. Item Lot
             # item type is determined by item category).
-            game_type, suffix, tooltip = field_metadata.dynamic_callback(field_dict)
+            display_type, suffix, tooltip = field_metadata.dynamic_callback.as_display_type(field_dict)
             field_name += suffix
             tooltip = f"{field_metadata.internal_name}: {tooltip}"
         else:  # static metadata
-            game_type = field_metadata.param_enum or field_metadata.game_type  # prefer enum if available
-            tooltip = f"{field_metadata.internal_name} ({game_type.__name__}): {field_metadata.tooltip}"
-        return field_name, not field_metadata.hide, game_type, tooltip
+            display_type = field_metadata.get_display_type()  # prefers enum if set
+            tooltip = f"{field_metadata.internal_name} ({display_type.__name__}): {field_metadata.tooltip}"
+        return field_name, not field_metadata.hide, display_type, tooltip
 
     def get_field_names(self, field_dict: ParamRow) -> list[str]:
         """NOTE: Param field names are now identical to their nicknames/display names.

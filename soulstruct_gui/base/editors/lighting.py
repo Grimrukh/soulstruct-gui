@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ["LightingEditor"]
+
 import logging
 import typing as tp
 
@@ -7,7 +9,7 @@ from soulstruct_gui.base.editors.base_editor import EntryRow
 from soulstruct_gui.base.editors.field_editor import BaseFieldEditor
 
 if tp.TYPE_CHECKING:
-    from soulstruct.base.params import Param, ParamRow, ParamFieldMetadata
+    from soulstruct.base.params import PARAM_GAME_TYPE, Param, ParamRow, ParamFieldMetadata
     from soulstruct.darksouls1ptde.params.draw_param import DrawParamBND, DrawParamDirectory
 
 _LOGGER = logging.getLogger("soulstruct_gui")
@@ -266,15 +268,18 @@ class LightingEditor(BaseFieldEditor):
                 raise ValueError("No params category selected.")
         return self.get_category_data(category)[entry_id]
 
-    def get_field_display_info(self, field_dict, field_name):
+    def get_field_display_info(self, field_dict: ParamRow, field_name: str) -> tuple[str, bool, PARAM_GAME_TYPE, str]:
         field_metadata = field_dict.get_field_metadata(field_name)  # type: ParamFieldMetadata
         if field_metadata.dynamic_callback:
-            game_type, suffix, tooltip = field_metadata.dynamic_callback(field_dict)
+            # Type, suffix, and tooltip of this field depend upon the value of one or more other fields (e.g. Item Lot
+            # item type is determined by item category).
+            display_type, suffix, tooltip = field_metadata.dynamic_callback.as_display_type(field_dict)
             field_name += suffix
+            tooltip = f"{field_metadata.internal_name}: {tooltip}"
         else:  # static metadata
-            game_type = field_metadata.game_type
-            tooltip = field_metadata.tooltip
-        return field_name, not field_metadata.hide, game_type, tooltip
+            display_type = field_metadata.get_display_type()  # prefers enum if set
+            tooltip = f"{field_metadata.internal_name} ({display_type.__name__}): {field_metadata.tooltip}"
+        return field_name, not field_metadata.hide, display_type, tooltip
 
     def get_field_names(self, field_dict: ParamRow):
         return field_dict.get_binary_field_names() if field_dict else []
