@@ -2,7 +2,7 @@ import shutil
 import unittest
 
 from soulstruct import DSR_PATH
-from soulstruct.darksouls1r.project import GameDirectoryProject, ProjectWindow
+from soulstruct_gui.darksouls1r import GameDirectoryProject, ProjectWindow
 from soulstruct.utilities.inspection import profile_function
 
 

@@ -9,7 +9,7 @@ import threading
 import time
 import typing as tp
 
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 from . import editor_config
 from .exceptions import SoulstructProjectError
 from .utilities import error_as_dialog
@@ -25,7 +25,7 @@ except ImportError:
     psutil = None
 
 
-class RuntimeManager(SmartFrame, abc.ABC):
+class RuntimeManager(SuperFrame, abc.ABC):
     DATA_NAME = None
     _THREADED_HOOK = False
 

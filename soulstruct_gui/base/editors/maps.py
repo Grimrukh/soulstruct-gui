@@ -201,13 +201,13 @@ class MapFieldRow(FieldRow):
     def update_field_value_display(self, new_value: tp.Any):
         """Updates field value display.
 
-        This handles `Vector3` field types separately (`self.master.e_coord` is the string name of the component).
+        This handles `Vector3` field types separately (`self.master.e_coord` is the enum of the component).
         Otherwise, it is identical to the base method, calling `field_update_method()` (which in turns looks for
         `_update_field_{type}()` methods or falls back to some basic types) and then updating links/context menu.
         """
         if issubclass(self.field_type, Vector3) and self.master.e_coord is not None:
             # A single coordinate is being edited.
-            self._set_linked_value_label(f"{self.master.e_coord}: {new_value:.3f}")
+            self._set_linked_value_label(f"{self.master.e_coord.name}: {new_value:.3f}")
         else:
             try:
                 self.field_update_method(new_value)
@@ -290,7 +290,7 @@ class MapFieldRow(FieldRow):
 
     def _set_linked_value_label(self, value_text, multiple_hint="{AMBIGUOUS}"):
         if self.master.e_coord is not None:
-            coord_label = getattr(self, f"value_vector_{self.master.e_coord}")
+            coord_label = getattr(self, f"value_vector_{self.master.e_coord.name}")
             coord_label.var.set(value_text)
             self._activate_value_widget(self.value_vector_frame)
             return
@@ -711,6 +711,13 @@ class MapFieldRow(FieldRow):
 MSB_TYPE = tp.TypeVar("MSB_TYPE", bound=MSB)
 
 
+class EditedCoord(IntEnum):
+    """Used to index `Vector3` data and set display column index. Also used by `MSBRegion` shape dimensions."""
+    X = 0
+    Y = 1
+    Z = 2
+
+
 class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     DATA_NAME = "Maps"
     TAB_NAME = "maps"
@@ -732,6 +739,8 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
 
     entry_rows: list[MapEntryRow]
     field_rows: list[MapFieldRow]
+
+    e_coord: EditedCoord | None  # coordinate currently being edited, if any
 
     def __init__(
         self,
@@ -1088,24 +1097,27 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
 
         if issubclass(field_type, MapEntry):
             # Pop-out editor to choose a map entry.
+            field_value: MSBEntry | None
             field_row.choose_linked_map_entry()
             return None
 
         if issubclass(field_type, GameObjectIntSequence) and issubclass(field_type.game_object_int_type, MapEntry):
             # Pop-out editor to choose multiple map entries.
+            field_value: tp.Sequence[MSBEntry | None]
             field_row.choose_linked_map_entries()
             return None
 
         if issubclass(field_type, Vector3):
+            field_value: Vector3
             if self.e_coord is None:
                 return None  # Exact coordinate not clicked.
             return self.Entry(
                 field_row.value_vector_frame,
-                initial_text=getattr(field_value, self.e_coord),
+                initial_text=field_value[self.e_coord.value],
                 numbers_only=True,
                 sticky="ew",
                 width=5,
-                column="xyz".index(self.e_coord),
+                column=self.e_coord.value,
             )
 
         if issubclass(field_type, GroupBitSet):
@@ -1122,9 +1134,9 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
 
         return super()._get_field_edit_widget(row_index)
 
-    def _start_field_value_edit(self, row_index, coord=None):
-        if self.e_field_value_edit and self.e_coord and coord and coord != self.e_coord:
-            # Finish up previous coord edit.
+    def _start_field_value_edit(self, row_index, coord: EditedCoord | None = None):
+        if self.e_field_value_edit and self.e_coord and coord is not None and coord != self.e_coord:
+            # Finish up previous coord edit before starting new one.
             self._confirm_field_value_edit(row_index)
         self.e_coord = coord
         super()._start_field_value_edit(row_index)
@@ -1157,7 +1169,8 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
         msb_entry = self.get_selected_field_dict()  # type: MSBEntry
         old_value = msb_entry[field_name]
         if self.e_coord:
-            old_value = getattr(old_value, self.e_coord)
+            old_value: Vector3
+            old_value = old_value[self.e_coord.value]
 
         # We check `MSBEntry` equality by ID (as identical entries may appear in different maps, e.g. models).
         if isinstance(new_value, MSBEntry) and id(old_value) == id(new_value):
@@ -1167,7 +1180,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
         try:
             if self.e_coord:
                 # Set just specified coordinate of existing field value vector.
-                setattr(msb_entry[field_name], self.e_coord, new_value)
+                msb_entry[field_name][self.e_coord.value] = new_value
             else:
                 msb_entry[field_name] = new_value
         except InvalidFieldValueError as e:
@@ -1179,19 +1192,19 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     def _field_press_up(self, _=None):
         if self.selected_field_row_index is not None:
             edit_new_row = self.e_field_value_edit is not None
-            new_coord = ""
+            new_coord = None
             if self.e_coord is not None:
-                if self.e_coord == "y":
-                    new_coord = "x"
+                if self.e_coord.value in {1, 2}:
+                    # Edit previous coordinate.
+                    new_coord = EditedCoord(self.e_coord.value - 1)
                     edit_new_row = False
-                elif self.e_coord == "z":
-                    new_coord = "y"
-                    edit_new_row = False
+
             self._confirm_field_value_edit(self.selected_field_row_index)
-            if new_coord in {"x", "y"}:
+            if new_coord is not None:
                 self._start_field_value_edit(self.selected_field_row_index, coord=new_coord)
             else:
                 self._shift_selected_field(-1)
+
             if edit_new_row and self.field_rows[self.selected_field_row_index].editable:
                 self._start_field_value_edit(self.selected_field_row_index)
             if self.field_canvas.yview()[1] != 1.0 or self.selected_field_row_index < self.displayed_field_count - 5:
@@ -1200,19 +1213,19 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     def _field_press_down(self, _=None):
         if self.selected_field_row_index is not None:
             edit_new_row = self.e_field_value_edit is not None or self.e_coord
-            new_coord = ""
+            new_coord = None
             if self.e_coord is not None:
-                if self.e_coord == "x":
-                    new_coord = "y"
+                if self.e_coord.value in {0, 1}:
+                    # Edit next coordinate.
+                    new_coord = EditedCoord(self.e_coord.value + 1)
                     edit_new_row = False
-                elif self.e_coord == "y":
-                    new_coord = "z"
-                    edit_new_row = False
+
             self._confirm_field_value_edit(self.selected_field_row_index)
-            if new_coord in {"y", "z"}:
+            if new_coord is not None:
                 self._start_field_value_edit(self.selected_field_row_index, coord=new_coord)
             else:
                 self._shift_selected_field(+1)
+
             if edit_new_row and self.field_rows[self.selected_field_row_index].editable:
                 self._start_field_value_edit(self.selected_field_row_index)
             if self.field_canvas.yview()[0] != 0.0 or self.selected_field_row_index > 5:

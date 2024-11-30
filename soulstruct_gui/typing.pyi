@@ -1,4 +1,4 @@
-"""Adds `SmartFrame`-imbued attributes to `Tkinter` widgets."""
+"""Adds `SuperFrame`-imbued attributes to `Tkinter` widgets."""
 
 __all__ = [
     # var added

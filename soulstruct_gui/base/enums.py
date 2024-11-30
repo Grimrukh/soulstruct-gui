@@ -1,6 +1,6 @@
 __all__ = ["ProjectDataType"]
 
-from soulstruct.utilities.future import StrEnum
+from enum import StrEnum
 
 
 class ProjectDataType(StrEnum):

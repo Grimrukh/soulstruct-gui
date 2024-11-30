@@ -19,7 +19,7 @@ from soulstruct.exceptions import RestoreBackupError
 from soulstruct.utilities.files import restore_bak
 from soulstruct.utilities.text import word_wrap
 
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 from . import editor_config
 
 from .editors import (
@@ -64,7 +64,7 @@ class ImportSettings(tp.NamedTuple):
     extra_settings: dict[str, bool]
 
 
-class ProjectCreatorWizard(SmartFrame):
+class ProjectCreatorWizard(SuperFrame):
     """Provides a bunch of checkbuttons for creating a new project."""
     # TODO: Can probably fold the Game Selector into this too?
 
@@ -196,7 +196,7 @@ class ProjectCreatorWizard(SmartFrame):
                     self.extra_bool_vars[bool_key] = check.var
 
 
-class ProjectWindow(SmartFrame, abc.ABC):
+class ProjectWindow(SuperFrame, abc.ABC):
 
     PROJECT_CLASS: type[GameDirectoryProject] = None
     LINKER_CLASS: type[WindowLinker] = WindowLinker
@@ -420,19 +420,19 @@ class ProjectWindow(SmartFrame, abc.ABC):
 
         # Created now or never.
         if "runtime" in self.tab_frames:
-            self.runtime_tab = self.SmartFrame(
+            self.runtime_tab = self.SuperFrame(
                 frame=self.tab_frames["runtime"],
-                smart_frame_class=self.RUNTIME_MANAGER_CLASS,
+                super_frame_class=self.RUNTIME_MANAGER_CLASS,
                 project=self.project,
                 sticky="nsew",
             )
             self.runtime_tab.bind("<Visibility>", self._update_banner)
 
-        for tab_name, smart_frame_class in self.EXTRA_TAB_CLASSES.items():
-            # `smart_frame_class` just needs to accept `project` argument.
-            extra_tab = self.SmartFrame(
+        for tab_name, super_frame_class in self.EXTRA_TAB_CLASSES.items():
+            # `super_frame_class` just needs to accept `project` argument.
+            extra_tab = self.SuperFrame(
                 frame=self.tab_frames[tab_name],
-                smart_frame_class=smart_frame_class,
+                super_frame_class=super_frame_class,
                 project=self.project,
                 sticky="nsew",
             )
@@ -451,9 +451,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
     # region Tab Creators
 
     def create_Maps_tab(self):
-        self.maps_tab = self.SmartFrame(
+        self.maps_tab = self.SuperFrame(
             frame=self.tab_frames["maps"],
-            smart_frame_class=self.MAPS_EDITOR_CLASS,
+            super_frame_class=self.MAPS_EDITOR_CLASS,
             project=self.project,
             character_models=self.CHARACTER_MODELS,
             global_map_choice_func=self.set_global_map_choice,
@@ -464,9 +464,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Maps)
 
     def create_Enums_tab(self):
-        self.enums_tab = self.SmartFrame(
+        self.enums_tab = self.SuperFrame(
             frame=self.tab_frames["enums"],
-            smart_frame_class=self.ENUMS_EDITOR_CLASS,
+            super_frame_class=self.ENUMS_EDITOR_CLASS,
             project=self.project,
             enums_directory=self.project.enums_directory,
             global_map_choice_func=self.set_global_map_choice,
@@ -477,9 +477,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Enums)
 
     def create_Params_tab(self):
-        self.params_tab = self.SmartFrame(
+        self.params_tab = self.SuperFrame(
             frame=self.tab_frames["params"],
-            smart_frame_class=self.PARAMS_EDITOR_CLASS,
+            super_frame_class=self.PARAMS_EDITOR_CLASS,
             project=self.project,
             linker=self.linker,
             sticky="nsew",
@@ -488,9 +488,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Params)
 
     def create_Lighting_tab(self):
-        self.lighting_tab = self.SmartFrame(
+        self.lighting_tab = self.SuperFrame(
             frame=self.tab_frames["lighting"],
-            smart_frame_class=self.LIGHTING_EDITOR_CLASS,
+            super_frame_class=self.LIGHTING_EDITOR_CLASS,
             project=self.project,
             linker=self.linker,
             sticky="nsew",
@@ -499,9 +499,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Lighting)
 
     def create_Text_tab(self):
-        self.text_tab = self.SmartFrame(
+        self.text_tab = self.SuperFrame(
             frame=self.tab_frames["text"],
-            smart_frame_class=self.TEXT_EDITOR_CLASS,
+            super_frame_class=self.TEXT_EDITOR_CLASS,
             project=self.project,
             linker=self.linker,
             sticky="nsew",
@@ -510,9 +510,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Text)
 
     def create_Events_tab(self):
-        self.events_tab = self.SmartFrame(
+        self.events_tab = self.SuperFrame(
             frame=self.tab_frames["events"],
-            smart_frame_class=self.EVENT_EDITOR_CLASS,
+            super_frame_class=self.EVENT_EDITOR_CLASS,
             project=self.project,
             evs_directory=self.project.project_root / "events",
             game_root=self.project.game_root,
@@ -524,9 +524,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.Events)
 
     def create_AI_tab(self):
-        self.ai_tab = self.SmartFrame(
+        self.ai_tab = self.SuperFrame(
             frame=self.tab_frames["ai"],
-            smart_frame_class=self.AI_EDITOR_CLASS,
+            super_frame_class=self.AI_EDITOR_CLASS,
             project=self.project,
             script_directory=self.project.project_root / "ai_scripts",
             allow_decompile=self.project.get_game().name == "Dark Souls Remastered",
@@ -539,9 +539,9 @@ class ProjectWindow(SmartFrame, abc.ABC):
         self.loaded_tab_data_types.add(ProjectDataType.AI)
 
     def create_Talk_tab(self):
-        self.talk_tab = self.SmartFrame(
+        self.talk_tab = self.SuperFrame(
             frame=self.tab_frames["talk"],
-            smart_frame_class=self.TALK_EDITOR_CLASS,
+            super_frame_class=self.TALK_EDITOR_CLASS,
             project=self.project,
             esp_directory=self.project.project_root / "talk",
             global_map_choice_func=self.set_global_map_choice,

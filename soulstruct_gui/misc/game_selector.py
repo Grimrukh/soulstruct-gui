@@ -6,10 +6,10 @@ import typing as tp
 
 from soulstruct.games import get_game, Game
 
-from soulstruct_gui.window import SmartFrame, bind_to_all_children
+from soulstruct_gui.window import SuperFrame, bind_to_all_children
 
 
-class GameSelector(SmartFrame):
+class GameSelector(SuperFrame):
 
     def __init__(self, *name_options):
         super().__init__(window_title="Game Selector")

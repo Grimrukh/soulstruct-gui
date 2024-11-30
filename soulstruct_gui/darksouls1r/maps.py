@@ -7,7 +7,7 @@ from soulstruct.darksouls1r.game_types import ObjActParam, PlaceName, BaseDrawPa
 from soulstruct.darksouls1ptde.maps.parts import MSBPart, MSBCollision
 
 from soulstruct_gui.base.editors.maps import MapsEditor as BaseMapsEditor
-from soulstruct_gui.darksouls1ptde.maps import MapConnectionCreator, MapEntryRow
+from soulstruct_gui.darksouls1ptde.maps import ConnectCollisionCreator, MapEntryRow
 
 
 class MapsEditor(BaseMapsEditor):
@@ -29,7 +29,7 @@ class MapsEditor(BaseMapsEditor):
             else:
                 valid_null_values = {0: "Default/None", -1: "Default/None"}
 
-        if issubclass(field_type, BaseDrawParam) and self.active_category.endswith("MapConnections"):
+        if issubclass(field_type, BaseDrawParam) and self.active_category.endswith("ConnectCollisions"):
             map_id = [
                 map_id_part if map_id_part != -1 else 0
                 for map_id_part in self.get_selected_field_dict().connected_map_id
@@ -41,19 +41,19 @@ class MapsEditor(BaseMapsEditor):
             field_type, field_value, valid_null_values=valid_null_values, map_override=map_override,
         )
 
-    def create_map_connection(self, entry_id: int):
-        """Create a `MapConnection` from the given `Collision` via a user pop-up."""
+    def create_connect_collision(self, entry_id: int):
+        """Create a `ConnectCollision` from the given `Collision` via a user pop-up."""
         collisions = self._get_category_subtype_list()
         collision = collisions[entry_id]  # type: MSBCollision
-        map_connection = MapConnectionCreator(collision, self.maps.ALL_MAPS, master=self).go()
-        if map_connection:
+        connect_collision = ConnectCollisionCreator(collision, self.maps.ALL_MAPS, master=self).go()
+        if connect_collision:
             msb = self.get_selected_msb()
-            existing_map_connection_names = msb.map_connections.get_entry_names()
-            if map_connection.name in existing_map_connection_names:
+            existing_connect_collision_names = msb.connect_collisions.get_entry_names()
+            if connect_collision.name in existing_connect_collision_names:
                 self.error_dialog(
-                    "Map Connection Name Conflict",
-                    f"A Map Connection with the name '{map_connection.name}' already exists in this MSB. Try deleting "
+                    "Connect Collision Name Conflict",
+                    f"A Connect Collision with the name '{connect_collision.name}' already exists in this MSB. Try deleting "
                     f"or editing that entry.",
                 )
             else:
-                msb.map_connections.append(map_connection)
+                msb.connect_collisions.append(connect_collision)

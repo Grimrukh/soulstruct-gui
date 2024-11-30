@@ -11,7 +11,7 @@ import typing as tp
 from pathlib import Path
 
 from soulstruct.darksouls1ptde.game_types.map_types import *
-from soulstruct.utilities.files import import_arbitrary_file
+from soulstruct.utilities.files import import_arbitrary_module
 from soulstruct.utilities.text import word_wrap
 
 from soulstruct_gui.base.editors.base_editor import BaseEditor, EntryRow
@@ -42,9 +42,7 @@ ENTITY_GAME_TYPES = (
     SpawnPointEvent,
     NavigationEvent,
     RegionPoint,
-    RegionSphere,
-    RegionCylinder,
-    RegionBox,
+    RegionVolume,
 )
 
 _RE_ENUM_CLASS = re.compile(r"^class (\w+)\(\w+\): *$")
@@ -468,7 +466,7 @@ class EnumsEditor(BaseEditor):
         sys.path.append(str(module_path.parent))
 
         try:  # test if module is valid Python
-            entity_module = import_arbitrary_file(module_path)
+            entity_module = import_arbitrary_module(module_path)
         except Exception as ex:
             return self.error_dialog("Import Error", f"Could not import {module_path.name}. Error:\n\n{str(ex)}")
 
@@ -480,7 +478,7 @@ class EnumsEditor(BaseEditor):
     def _update_names_from_import(self, entity_module: tp.Union[str, Path, types.ModuleType], module_path: Path):
         if isinstance(entity_module, (str, Path)):
             try:
-                entity_module = import_arbitrary_file(module_path)
+                entity_module = import_arbitrary_module(module_path)
             except Exception as ex:
                 return self.error_dialog("Import Error", f"Could not import {module_path.name}. Error:\n\n{str(ex)}")
 

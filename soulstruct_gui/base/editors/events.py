@@ -12,10 +12,10 @@ import typing as tp
 from pathlib import Path
 from tkinter import TclError
 
-from soulstruct.base.events.emevd.evs import EVSError
+from soulstruct.base.events.evs.exceptions import EVSError
 from soulstruct_gui.base import GameDirectoryProject, ProjectDataType, editor_config
 from soulstruct_gui.base.utilities import TagData, TkTextEditor
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 
 if tp.TYPE_CHECKING:
     from soulstruct.base.events.event_directory import EventDirectory
@@ -83,7 +83,7 @@ class EVSTkTextEditor(TkTextEditor):
             start_index = next_def_index
 
 
-class EventsEditor(SmartFrame):
+class EventsEditor(SuperFrame):
     DATA_NAME = "Events"
     TAB_NAME = "events"
     TEXT_BG = "#232323"

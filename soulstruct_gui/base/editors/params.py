@@ -17,7 +17,7 @@ from soulstruct.base.params.utilities import ParamFieldComparisonType, ParamFiel
 from soulstruct_gui.base.editors.base_editor import EntryRow
 from soulstruct_gui.base.editors.field_editor import FieldRow, BaseFieldEditor
 from soulstruct_gui.base.utilities import NameSelectionBox
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 
 if tp.TYPE_CHECKING:
     from soulstruct.base.params.gameparambnd import GameParamBND
@@ -365,7 +365,7 @@ class ParamsEditor(BaseFieldEditor):
             self.refresh_entries()
 
 
-class ParamFinder(SmartFrame):
+class ParamFinder(SuperFrame):
     """Allows the user to construct a search query for a given Param."""
 
     WIDTH = 70  # characters

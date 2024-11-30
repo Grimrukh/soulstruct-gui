@@ -21,7 +21,7 @@ from soulstruct_gui.base.utilities import (
     bind_events,
     EntryTextEditBox,
 )
-from soulstruct_gui.window import SmartFrame, ToolTip
+from soulstruct_gui.window import SuperFrame, ToolTip
 
 if tp.TYPE_CHECKING:
     from soulstruct_gui.base.core import GameDirectoryProject
@@ -219,7 +219,7 @@ class EntryRow:
         return f"#{base_bg}"
 
 
-class BaseEditor(SmartFrame, abc.ABC):
+class BaseEditor(SuperFrame, abc.ABC):
     """Base class for a two-part window that edits entry IDs and names within specific categories."""
     DATA_NAME = ""
     TAB_NAME = ""
@@ -569,7 +569,10 @@ class BaseEditor(SmartFrame, abc.ABC):
 
         row_index = self._update_first_entry_display_index(entry_index, as_row_index=as_row_index)
         self.refresh_entries()
-        self.entry_canvas.yview_moveto(as_row_index / self.displayed_entry_count)
+        if self.displayed_entry_count > 0:
+            self.entry_canvas.yview_moveto(as_row_index / self.displayed_entry_count)
+        else:
+            self.entry_canvas.yview_moveto(0)
         self.select_entry_row_index(
             row_index, set_focus_to_text=set_focus_to_text, edit_if_already_selected=edit_if_already_selected
         )

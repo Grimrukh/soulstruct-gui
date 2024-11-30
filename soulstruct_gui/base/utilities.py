@@ -24,7 +24,7 @@ from functools import wraps
 
 from soulstruct.utilities.text import word_wrap, camel_case_to_spaces
 
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 from .exceptions import SoulstructProjectError
 
 if tp.TYPE_CHECKING:
@@ -317,7 +317,7 @@ class TkTextEditor(tk.Text):
         return "break"
 
 
-class NameSelectionBox(SmartFrame):
+class NameSelectionBox(SuperFrame):
     """Small pop-out widget that allows you to select a name from some list."""
 
     WIDTH = 50  # characters
@@ -366,7 +366,7 @@ class NameSelectionBox(SmartFrame):
         self.quit()
 
 
-class CategorizedNameSelectionBox(SmartFrame):
+class CategorizedNameSelectionBox(SuperFrame):
     """Small pop-out widget that allows you to select a name from one of multiple category lists, chosen by dropdown."""
 
     WIDTH = 50  # characters
@@ -455,12 +455,12 @@ class CategorizedNameSelectionBox(SmartFrame):
         self.quit()
 
 
-class NumberEditBox(SmartFrame):
+class NumberEditBox(SuperFrame):
     """Small pop-out widget that allows you to enter a number."""
 
     def __init__(
         self,
-        master: SmartFrame,
+        master: SuperFrame,
         initial_value=None,
         window_title="Editing Number",
         integers_only=False,
@@ -522,12 +522,12 @@ class NumberEditBox(SmartFrame):
         self.quit()
 
 
-class TextEditBox(SmartFrame):
+class TextEditBox(SuperFrame):
     """Small pop-out widget that allows you to modify longer strings more freely, with newlines and all."""
 
     def __init__(
         self,
-        master: SmartFrame,
+        master: SuperFrame,
         initial_text="",
         allow_newlines=True,
         window_title="Editing Text",
@@ -653,7 +653,7 @@ class EntryTextEditBox(TextEditBox):
         self.quit()
 
 
-class ItemTextEditBox(SmartFrame):
+class ItemTextEditBox(SuperFrame):
     WIDTH = 70  # characters
     DESCRIPTION_HEIGHT = 10  # lines
 
@@ -705,7 +705,7 @@ class ItemTextEditBox(SmartFrame):
         self.quit()
 
 
-class SequenceNameEditBox(SmartFrame):
+class SequenceNameEditBox(SuperFrame):
     """Small pop-out widget that allows you to set the MSB entry names for a sequence.
 
     Pass it a list of valid names to get access to a selection box.
@@ -713,7 +713,7 @@ class SequenceNameEditBox(SmartFrame):
 
     def __init__(
         self,
-        master: SmartFrame,
+        master: SuperFrame,
         initial_names: tp.Sequence[str],
         valid_names: tp.Sequence[str] = None,
         window_title="Editing Sequence Names",
@@ -779,12 +779,12 @@ class SequenceNameEditBox(SmartFrame):
         self.quit()
 
 
-class GroupBitSetEditBox(SmartFrame):
+class GroupBitSetEditBox(SuperFrame):
     """Displays 128 or 256 checkbuttons to toggle for e.g. draw groups, display groups, navmesh groups."""
 
     def __init__(
         self,
-        master: SmartFrame,
+        master: SuperFrame,
         initial_bit_set=None,
         bit_count=128,
         window_title="Editing Bit Groups",
@@ -886,7 +886,7 @@ class GroupBitSetEditBox(SmartFrame):
         checkbutton.config(fg="#FFF" if value else "#555")
 
 
-class NumberAndNameSelectionBox(SmartFrame):
+class NumberAndNameSelectionBox(SuperFrame):
     """Small pop-out widget that allows you to select a name from some list and enter an integer number."""
 
     WIDTH = 50  # characters

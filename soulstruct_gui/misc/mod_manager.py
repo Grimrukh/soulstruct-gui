@@ -7,12 +7,12 @@ from soulstruct.config import DSR_PATH
 from soulstruct.darksouls1r.utilities.file_list import DSR_FILE_LIST
 from soulstruct.utilities.files import read_json, write_json
 
-from soulstruct_gui.window import SmartFrame
+from soulstruct_gui.window import SuperFrame
 
 _LOGGER = logging.getLogger("soulstruct_gui.mod_manager")
 
 
-class ModManagerWindow(SmartFrame):
+class ModManagerWindow(SuperFrame):
     """Simple GUI for managing mod installations and easily recording/restoring vanilla files.
 
     Currently for Dark Souls: Remastered only.
