@@ -12,7 +12,7 @@ import typing as tp
 from pathlib import Path
 from tkinter import TclError
 
-from soulstruct.base.events.emevd.evs import EVSError
+from soulstruct.base.events.evs.exceptions import EVSError
 from soulstruct_gui.base import GameDirectoryProject, ProjectDataType, editor_config
 from soulstruct_gui.base.utilities import TagData, TkTextEditor
 from soulstruct_gui.window import SmartFrame

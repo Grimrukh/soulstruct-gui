@@ -9,7 +9,7 @@ from soulstruct.base.maps.msb import GroupBitSet128
 from soulstruct.darksouls1ptde import game_types
 from soulstruct.darksouls1ptde.game_types import Map, ObjActParam, PlaceName, BaseDrawParam
 from soulstruct.darksouls1ptde.maps import MSB
-from soulstruct.darksouls1ptde.maps.parts import MSBPart, MSBCollision, MSBMapConnection
+from soulstruct.darksouls1ptde.maps.parts import MSBPart, MSBCollision, MSBConnectCollision
 
 from soulstruct_gui.window import SmartFrame
 from soulstruct_gui.base.editors.maps import MapsEditor as BaseMapsEditor, MapEntryRow as BaseMapEntryRow
@@ -18,8 +18,8 @@ if tp.TYPE_CHECKING:
     from soulstruct_gui.typing import *
 
 
-class MapConnectionCreator(SmartFrame):
-    """User chooses a game map and draw/display groups to create a `MapConnection` part from a chosen `Collision`."""
+class ConnectCollisionCreator(SmartFrame):
+    """User chooses a game map and draw/display groups to create a `ConnectCollision` part from a chosen `Collision`."""
 
     LAST_MAP_CHOICE: tp.ClassVar[str] = None
     LAST_DRAW_DISPLAY_GROUPS: tp.ClassVar[str] = "[0]"
@@ -28,13 +28,13 @@ class MapConnectionCreator(SmartFrame):
     map_choice: Combobox
     draw_display_groups: Entry
 
-    map_connection: MSBMapConnection | None  # created by `done()`
+    connect_collision: MSBConnectCollision | None  # created by `done()`
 
     def __init__(self, collision: MSBCollision, game_maps: tuple[Map], master=None):
         super().__init__(master=master, toplevel=True, window_title="Create Map Connection")
 
         self.collision = collision
-        self.map_connection = None
+        self.connect_collision = None
 
         map_choices = [
             f"{game_map.emevd_file_stem} [{game_map.verbose_name}]" for game_map in game_maps  # note use of EMEVD stem
@@ -66,23 +66,23 @@ class MapConnectionCreator(SmartFrame):
         self.resizable(width=False, height=False)
         self.set_geometry(relative_position=(0.5, 0.3), transient=True)
 
-    def go(self) -> MSBMapConnection | None:
+    def go(self) -> MSBConnectCollision | None:
         self.wait_visibility()
         self.grab_set()
         self.mainloop()
         self.destroy()
-        return self.map_connection
+        return self.connect_collision
 
     def done(self, confirm=True):
         if confirm:
             try:
-                self.map_connection = self._create_map_connection()
+                self.connect_collision = self._create_connect_collision()
             except Exception as ex:
                 self.error_dialog("Map Connection Error", f"Could not create Map Connection. Error:\n{ex}")
                 return
         self.quit()
 
-    def _create_map_connection(self) -> MSBMapConnection:
+    def _create_connect_collision(self) -> MSBConnectCollision:
         map_stem = self.map_choice.var.get().split(" ")[0]
         area, block = int(map_stem[1:3]), int(map_stem[4:6])
 
@@ -103,7 +103,7 @@ class MapConnectionCreator(SmartFrame):
         self.__class__.LAST_MAP_CHOICE = self.map_choice.var.get()
         self.__class__.LAST_DRAW_DISPLAY_GROUPS = string
 
-        return MSBMapConnection(
+        return MSBConnectCollision(
             name=f"{self.collision.name}_[{area:02d}_{block:02d}]",
             connected_map_id=[area, block, -1, -1],
             collision=self.collision,
@@ -123,12 +123,12 @@ class MapEntryRow(BaseMapEntryRow):
     def build_entry_context_menu(self):
         super().build_entry_context_menu()
 
-        # Generate a `MapConnection` from a `Collision`.
+        # Generate a `ConnectCollision` from a `Collision`.
         msb_type, msb_subtype = self.master.active_category.split(": ")
         if msb_type == "Parts" and msb_subtype == "Collisions":
             self.context_menu.add_command(
                 label="Create Map Connection",
-                command=lambda: self.master.create_map_connection(self.entry_id),
+                command=lambda: self.master.create_connect_collision(self.entry_id),
             )
 
 
@@ -155,7 +155,7 @@ class MapsEditor(BaseMapsEditor[MSB]):
                 valid_null_values = {-1: "Default/None"}
             else:
                 valid_null_values = {0: "Default/None", -1: "Default/None"}
-        if issubclass(field_type, BaseDrawParam) and self.active_category.endswith("MapConnections"):
+        if issubclass(field_type, BaseDrawParam) and self.active_category.endswith("ConnectCollisions"):
             map_override = self.get_selected_field_dict().connected_map.emevd_file_stem
         else:
             map_override = None
@@ -163,19 +163,19 @@ class MapsEditor(BaseMapsEditor[MSB]):
             field_type, field_value, valid_null_values=valid_null_values, map_override=map_override,
         )
 
-    def create_map_connection(self, entry_id: int):
-        """Create a `MapConnection` from the given `Collision` via a user pop-up."""
+    def create_connect_collision(self, entry_id: int):
+        """Create a `ConnectCollision` from the given `Collision` via a user pop-up."""
         collisions = self._get_category_subtype_list()
         collision = collisions[entry_id]  # type: MSBCollision
-        map_connection = MapConnectionCreator(collision, self.maps.ALL_MAPS).go()
-        if map_connection:
+        connect_collision = ConnectCollisionCreator(collision, self.maps.ALL_MAPS).go()
+        if connect_collision:
             msb = self.get_selected_msb()
-            existing_map_connection_names = msb.map_connections.get_entry_names()
-            if map_connection.name in existing_map_connection_names:
+            existing_connect_collision_names = msb.connect_collisions.get_entry_names()
+            if connect_collision.name in existing_connect_collision_names:
                 self.error_dialog(
                     "Map Connection Name Conflict",
-                    f"A Map Connection with the name '{map_connection.name}' already exists in this MSB. Try deleting "
+                    f"A Map Connection with the name '{connect_collision.name}' already exists in this MSB. Try deleting "
                     f"or editing that entry.",
                 )
             else:
-                msb.map_connections.append(map_connection)
+                msb.connect_collisions.append(connect_collision)

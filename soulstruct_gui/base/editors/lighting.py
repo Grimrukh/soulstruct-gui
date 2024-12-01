@@ -135,7 +135,7 @@ class LightingEditor(BaseFieldEditor):
         self.refresh_entries(reset_field_display=True)
 
     def _set_valid_slot_values(self, map_area):
-        if getattr(self.lighting, map_area).BakedLight[1] is None:  # random Param to check slots
+        if getattr(self.lighting, map_area).BakedLight_1 is None:  # random Param to check slots
             self.slot_choice.config(values=["0"])
             if self.slot_choice.var.get() == "1":
                 self.flash_bg(self.slot_choice_label)
@@ -155,7 +155,7 @@ class LightingEditor(BaseFieldEditor):
     def regenerate_slot_1(self):
         map_area = self.get_map_area_name()
         map_draw_param = getattr(self.lighting, map_area)  # type: DrawParamBND
-        if map_draw_param.BakedLight[1] is not None:  # random Param to check slots
+        if map_draw_param.BakedLight_1 is not None:  # random Param to check slots
             if (
                 self.CustomDialog(
                     title="Overwrite Slot 1?",
