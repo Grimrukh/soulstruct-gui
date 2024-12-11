@@ -16,6 +16,7 @@ import typing as tp
 from pathlib import Path
 
 from soulstruct import __version__
+from soulstruct.base.maps.enum_module_generator import EnumModuleGenerator
 from soulstruct.config import DEFAULT_TEXT_EDITOR_FONT_SIZE
 from soulstruct.games import get_game
 from soulstruct.utilities.files import PACKAGE_PATH, read_json, write_json
@@ -257,7 +258,7 @@ class GameDirectoryProject(abc.ABC):
         enums_folder = self.enums_directory
         for map_stem, msb in maps.files.items():
             game_map = maps.GET_MAP(map_stem)
-            msb.write_enums_module(enums_folder / f"{game_map.emevd_file_stem}_enums.py")
+            EnumModuleGenerator(msb, map_stem).write_enums_module(enums_folder / f"{game_map.emevd_file_stem}_enums.py")
 
         # No data to set (Python module files on disk ARE the project data).
 

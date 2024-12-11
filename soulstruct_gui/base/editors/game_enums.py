@@ -10,6 +10,7 @@ import types
 import typing as tp
 from pathlib import Path
 
+from soulstruct.base.maps.enum_module_generator import EnumModuleGenerator
 from soulstruct.darksouls1ptde.game_types.map_types import *
 from soulstruct.utilities.files import import_arbitrary_module
 from soulstruct.utilities.text import word_wrap
@@ -41,8 +42,7 @@ ENTITY_GAME_TYPES = (
     MessageEvent,
     SpawnPointEvent,
     NavigationEvent,
-    RegionPoint,
-    RegionVolume,  # TODO: not a real type
+    Region,
 )
 
 _RE_ENUM_CLASS = re.compile(r"^class (\w+)\(\w+\): *$")
@@ -199,6 +199,12 @@ class EnumEntryRow(EntryRow):
 
 
 class EnumsEditor(BaseEditor):
+    """TODO: I want this to be a 1-to-1 representation of the 'enums.py' module:
+        - Enum names, and their true game type, are displayed in category view.
+        - Enum names, entity IDs, and descriptions (scraped from inline comments) are displayed in entry view.
+        - Any mismatch with current MSB data is highlighted red (e.g. name conflict, ID conflict, or completely missing)
+    """
+
     DATA_NAME = "Maps"
     TAB_NAME = "enums"
     CATEGORY_BOX_WIDTH = 400
@@ -229,57 +235,60 @@ class EnumsEditor(BaseEditor):
         return self._project.maps
 
     def build(self):
-        with self.set_master(sticky="nsew", row_weights=[0, 1], column_weights=[1], auto_rows=0):
+        full_frame_context = self.set_master(sticky="nsew", row_weights=[0, 1], column_weights=[1], auto_rows=0)
+        full_frame_context.__enter__()
 
-            # HEADER BUTTONS
-            with self.set_master(pady=10, sticky="w", row_weights=[1], column_weights=[1, 1, 1, 1], auto_columns=0):
-                map_display_names = [
-                    f"{game_map.msb_file_stem} [{game_map.verbose_name}]"
-                    for game_map in self.maps.ALL_MAPS
-                    if game_map.msb_file_stem
-                ]
-                self.map_choice = self.Combobox(
-                    values=map_display_names,
-                    label="Map:",
-                    label_position="left",
-                    width=55,
-                    font=self.CONFIG.REGULAR_FONT,
-                    on_select_function=self.on_map_choice,
-                    sticky="w",
-                    padx=10,
-                )
-                self.Button(
-                    text="Import Entity IDs",
-                    width=17,
-                    padx=10,
-                    command=lambda: self._import_enums_module(import_names=False),
-                    tooltip_text="Import all entity IDs and descriptions, based on matching entity names, from an "
-                    "existing Python module using Soulstruct game type enums (i.e. the format auto-generated).",
-                )
-                self.Button(
-                    text="Import Entity Names",
-                    width=20,
-                    padx=10,
-                    command=lambda: self._import_enums_module(import_names=True),
-                    tooltip_text="Import all entity names and descriptions, based on matching entity IDs, from an "
-                    "existing Python module using Soulstruct game type enums (i.e. the format auto-generated).",
-                )
-                self.Button(
-                    text="Write Enums",
-                    width=15,
-                    padx=10,
-                    command=self._write_enums_module,
-                    tooltip_text="Create or replace the Python enums module that can be imported into "
-                    "this map's EVS script. If you have changed any existing names and want to "
-                    "update the names in the EVS script, make sure to restore the IDs before "
-                    "regenerating this file.",
-                )
+        # HEADER BUTTONS
+        with self.set_master(pady=10, sticky="w", row_weights=[1], column_weights=[1, 1, 1, 1], auto_columns=0):
+            map_display_names = [
+                f"{game_map.msb_file_stem} [{game_map.verbose_name}]"
+                for game_map in self.maps.ALL_MAPS
+                if game_map.msb_file_stem
+            ]
+            self.map_choice = self.Combobox(
+                values=map_display_names,
+                label="Map:",
+                label_position="left",
+                width=55,
+                font=self.CONFIG.REGULAR_FONT,
+                on_select_function=self.on_map_choice,
+                sticky="w",
+                padx=10,
+            )
+            self.Button(
+                text="Import Entity IDs",
+                width=17,
+                padx=10,
+                command=lambda: self._import_enums_module(import_names=False),
+                tooltip_text="Import all entity IDs and descriptions, based on matching entity names, from an "
+                "existing Python module using Soulstruct game type enums (i.e. the format auto-generated).",
+            )
+            self.Button(
+                text="Import Entity Names",
+                width=20,
+                padx=10,
+                command=lambda: self._import_enums_module(import_names=True),
+                tooltip_text="Import all entity names and descriptions, based on matching entity IDs, from an "
+                "existing Python module using Soulstruct game type enums (i.e. the format auto-generated).",
+            )
+            self.Button(
+                text="Write Enums",
+                width=15,
+                padx=10,
+                command=self._write_enums_module,
+                tooltip_text="Create or replace the Python enums module that can be imported into "
+                "this map's EVS script. If you have changed any existing names and want to "
+                "update the names in the EVS script, make sure to restore the IDs before "
+                "regenerating this file.",
+            )
 
-            # MAIN BOXES
-            with self.set_master(sticky="nsew", row_weights=[1], column_weights=[0, 1], auto_columns=0):
-                self.build_category_canvas()
-                with self.set_master(sticky="nsew", row_weights=[1], column_weights=[1], auto_rows=0):
-                    self.build_entry_frame()
+        # MAIN BOXES
+        with self.set_master(sticky="nsew", row_weights=[1], column_weights=[0, 1], auto_columns=0):
+            self.build_category_canvas()
+            with self.set_master(sticky="nsew", row_weights=[1], column_weights=[1], auto_rows=0):
+                self.build_entry_frame()
+
+        full_frame_context.__exit__(None, None, None)
 
     def select_entry_row_index(
         self,
@@ -592,10 +601,7 @@ class EnumsEditor(BaseEditor):
                 if entry_game_type in attr.__bases__:
                     break  # found matching type
             else:
-                if RegionVolume in attr.__bases__:  # if unique, Volume enums are valid as Boxes/Spheres/Cylinders
-                    entry_game_type = RegionVolume
-                else:
-                    continue  # ignore this class
+                continue  # ignore this class
             found_map_entry_class_names.append(attr_name)
             for entity_enum in attr:
                 try:
@@ -611,16 +617,16 @@ class EnumsEditor(BaseEditor):
                     continue
                 supertype_name = entry.SUBTYPE_ENUM.get_plural_supertype_name()
                 entry_subtype_name = entry.SUBTYPE_ENUM.name
-                if entry_game_type is RegionVolume:
-                    if supertype_name != "Regions" or entry_subtype_name not in {"Sphere", "Cylinder", "Box"}:
-                        return self.error_dialog(
-                            "Entity Type Mismatch",
-                            f"Entity name {entity_enum.name} in Python module '{module_path.stem}' has type "
-                            f"`RegionVolume`, but is not a Sphere, Cylinder, or Box in the MSB. Cannot "
-                            f"import entity IDs from enums module until this is fixed.",
-                        )
-                    entries_by_entity_enum[entity_enum] = entry
-                elif entry_game_type.get_msb_entry_supertype_subtype() != (supertype_name, entry_subtype_name):
+                # if entry_game_type is RegionVolume:
+                #     if supertype_name != "Regions" or entry_subtype_name not in {"Sphere", "Cylinder", "Box"}:
+                #         return self.error_dialog(
+                #             "Entity Type Mismatch",
+                #             f"Entity name {entity_enum.name} in Python module '{module_path.stem}' has type "
+                #             f"`RegionVolume`, but is not a Sphere, Cylinder, or Box in the MSB. Cannot "
+                #             f"import entity IDs from enums module until this is fixed.",
+                #         )
+                #     entries_by_entity_enum[entity_enum] = entry
+                if entry_game_type.get_msb_entry_supertype_subtype() != (supertype_name, entry_subtype_name):
                     return self.error_dialog(
                         "Entity Type Mismatch",
                         f"Entity name {entity_enum.name} in Python module '{module_path.stem}' has type "
@@ -690,8 +696,9 @@ class EnumsEditor(BaseEditor):
         module_path = self.enums_directory / f"{game_map.emevd_file_stem}_enums.py"
 
         msb = self.get_selected_msb()
+        # TODO: Add comments.
         try:
-            msb.write_enums_module(module_path, area_id=game_map.area_id, block_id=game_map.block_id)
+            EnumModuleGenerator(msb, game_map.emevd_file_stem).write_enums_module(module_path)
         except Exception as ex:
             self.CustomDialog(
                 "Write Failed", f"An error occurred while writing '{{project}}/events/{module_path.name}':\n{ex}"

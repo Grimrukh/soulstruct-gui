@@ -17,6 +17,8 @@ from soulstruct.base.game_types.map_types import *
 from soulstruct.base.maps.msb import MSB, MSBEntry
 from soulstruct.base.maps.msb.enums import MSBSupertype, BaseMSBModelSubtype, BaseMSBRegionSubtype
 from soulstruct.base.maps.msb.models import BaseMSBModel
+from soulstruct.base.maps.msb.regions import BaseMSBRegion
+from soulstruct.base.maps.msb.region_shapes import *
 from soulstruct.base.maps.msb.utils import GroupBitSet, GroupBitSet128, GroupBitSet256, GroupBitSet1024
 from soulstruct.utilities.conversion import int_group_to_bit_set
 from soulstruct.utilities.maths import Vector3
@@ -170,7 +172,11 @@ class MapFieldRow(FieldRow):
 
         bg_color = self._get_color()
 
-        # Main difference of Maps tab is the ability to support three separate `Vector3` fields.
+        # Main difference of Maps tab is the ability to support three separate `Vector3` fields and fields for each
+        # `RegionShape` subtype.
+
+        third_width = editor.FIELD_VALUE_WIDTH // 6
+
         self.value_vector_frame = editor.Frame(
             self.value_box,
             bg=bg_color,
@@ -180,21 +186,77 @@ class MapFieldRow(FieldRow):
         )
         bind_events(self.value_vector_frame, main_bindings)
         self.value_vector_x = editor.Label(
-            self.value_vector_frame, text="", bg=bg_color, width=editor.FIELD_VALUE_WIDTH // 6, column=0, anchor="w"
+            self.value_vector_frame, text="", bg=bg_color, width=third_width, column=0, anchor="w"
         )
         self.value_vector_y = editor.Label(
-            self.value_vector_frame, text="", bg=bg_color, width=editor.FIELD_VALUE_WIDTH // 6, column=1, anchor="w"
+            self.value_vector_frame, text="", bg=bg_color, width=third_width, column=1, anchor="w"
         )
         self.value_vector_z = editor.Label(
-            self.value_vector_frame, text="", bg=bg_color, width=editor.FIELD_VALUE_WIDTH // 6, column=2, anchor="w"
+            self.value_vector_frame, text="", bg=bg_color, width=third_width, column=2, anchor="w"
         )
-
         for coord, label in zip("xyz", (self.value_vector_x, self.value_vector_y, self.value_vector_z)):
             vector_bindings = main_bindings.copy()
             vector_bindings.update(
                 {"<Button-1>": lambda _, c=coord: editor.select_displayed_field_row(row_index, coord=c)}
             )
             bind_events(label, vector_bindings)
+
+        self.value_shape_frame = editor.Frame(
+            self.value_box,
+            bg=bg_color,
+            width=editor.FIELD_VALUE_WIDTH,
+            height=2 * editor.FIELD_ROW_HEIGHT,  # two rows: shape type dropdown, and 1-3 shape dimensions
+            no_grid=True,
+        )
+        bind_events(self.value_shape_frame, main_bindings)
+        self.value_shape_type_label = editor.Label(
+            self.value_shape_frame,
+            text="Shape Type:",
+            bg=bg_color,
+            width=15,
+            row=0,
+            column=0,
+        )
+
+        shape_types = [subtype.name for subtype in RegionShapeType]
+        if not self.master.HAS_COMPOSITE_SHAPE:
+            shape_types.remove("Composite")
+
+        self.value_shape_type = editor.Combobox(
+            self.value_shape_frame,
+            values=shape_types,
+            width=15,
+            row=0,
+            column=1,
+            columnspan=2,
+            sticky="ew",
+            on_select_function=lambda _: self.master.change_region_shape_type(
+                RegionShapeType[self.value_shape_type.var.get()]
+            ),
+        )
+        self.value_shape_R = editor.Label(
+            self.value_shape_frame, text="", bg=bg_color, width=third_width, row=1, column=0, anchor="w"
+        )
+        self.value_shape_W = editor.Label(
+            self.value_shape_frame, text="", bg=bg_color, width=third_width, row=1, column=0, anchor="w"
+        )
+        self.value_shape_H = editor.Label(
+            self.value_shape_frame, text="", bg=bg_color, width=third_width, row=1, column=1, anchor="w"
+        )
+        self.value_shape_D = editor.Label(
+            self.value_shape_frame, text="", bg=bg_color, width=third_width, row=1, column=2, anchor="w"
+        )
+
+        for dim, label in zip("RWHD", (self.value_shape_R, self.value_shape_W, self.value_shape_H, self.value_shape_D)):
+            shape_bindings = main_bindings.copy()
+            shape_bindings.update(
+                {
+                    "<Button-1>": lambda _, d=dim: editor.select_displayed_field_row(
+                        row_index, edit_if_already_selected=d in self.master.valid_shape_dims, shape_dim=d
+                    )
+                }
+            )
+            bind_events(label, shape_bindings)
 
         self.unhide()
 
@@ -208,6 +270,9 @@ class MapFieldRow(FieldRow):
         if issubclass(self.field_type, Vector3) and self.master.e_coord is not None:
             # A single coordinate is being edited.
             self._set_linked_value_label(f"{self.master.e_coord}: {new_value:.3f}")
+        elif issubclass(self.field_type, RegionShape) and self.master.e_shape_dim is not None:
+            # A single shape dimension is being edited (labels vary by shape subclass).
+            self._set_linked_value_label(f"{self.master.e_shape_dim}: {new_value:.3f}")
         else:
             try:
                 self.field_update_method(new_value)
@@ -262,6 +327,45 @@ class MapFieldRow(FieldRow):
         self.value_vector_z.var.set(f"z: {value.z:.3f}")
         self._activate_value_widget(self.value_vector_frame)
 
+    def _update_field_RegionShape(self, value: RegionShape):
+        """Update field with a `RegionShape` value. (No chance of a link.)"""
+        strings = {"R": "---", "W": "---", "H": "---", "D": "---"}
+        self.value_shape_type.var.set(value.SHAPE_TYPE.name)
+        self.master.valid_shape_dims = value.SHAPE_DIMS
+        if isinstance(value, PointShape):
+            pass
+        elif isinstance(value, CircleShape):
+            strings["R"] = f"R: {value.radius:.3f}"
+            self.value_shape_W.grid_remove()
+            self.value_shape_R.grid()
+        elif isinstance(value, SphereShape):
+            strings["R"] = f"R: {value.radius:.3f}"
+            self.value_shape_W.grid_remove()
+            self.value_shape_R.grid()
+        elif isinstance(value, CylinderShape):
+            strings["R"] = f"R: {value.radius:.3f}"
+            strings["H"] = f"H: {value.height:.3f}"
+            self.value_shape_W.grid_remove()
+            self.value_shape_R.grid()
+        elif isinstance(value, RectShape):
+            strings["W"] = f"W: {value.width:.3f}"
+            strings["D"] = f"D: {value.depth:.3f}"
+            self.value_shape_R.grid_remove()
+            self.value_shape_W.grid()
+        elif isinstance(value, BoxShape):
+            strings["W"] = f"W: {value.width:.3f}"
+            strings["H"] = f"H: {value.height:.3f}"
+            strings["D"] = f"D: {value.depth:.3f}"
+            self.value_shape_R.grid_remove()
+            self.value_shape_W.grid()
+        elif isinstance(value, CompositeShape):
+            pass
+
+        for key, string in strings.items():
+            getattr(self, f"value_shape_{key}").var.set(string)
+
+        self._activate_value_widget(self.value_shape_frame)
+
     def _update_field_Map(self, value: Map):
         """Update field with a valid 'Map' specification. (No chance of a link.)
 
@@ -293,6 +397,12 @@ class MapFieldRow(FieldRow):
             coord_label = getattr(self, f"value_vector_{self.master.e_coord}")
             coord_label.var.set(value_text)
             self._activate_value_widget(self.value_vector_frame)
+            return
+
+        if self.master.e_shape_dim is not None:
+            dim_label = getattr(self, f"value_shape_{self.master.e_shape_dim}")
+            dim_label.var.set(value_text)
+            self._activate_value_widget(self.value_shape_frame)
             return
 
         if self.field_links:
@@ -336,7 +446,7 @@ class MapFieldRow(FieldRow):
             self.context_menu.add_command(
                 label="Select linked entries from list", command=self.choose_linked_map_entries
             )
-            if self.field_type.game_object_int_type is Region or self.field_type.game_object_int_type is RegionPoint:
+            if self.field_type.game_object_int_type is Region:
                 # Option to add a point to a list of Points, based on current player translate/rotate.
                 # NOTE: Assumes that Points are sufficient for any `Region` sequence, which I think is true for all
                 # sequence fields I've seen.
@@ -633,11 +743,17 @@ class MapFieldRow(FieldRow):
             self.update_field_value_display(new_group_bit_set)
 
     @property
-    def editable(self):
-        return id(self.active_value_widget) in {id(self.value_label), id(self.value_vector_frame)}
+    def editable(self) -> bool:
+        return id(self.active_value_widget) in {
+            id(self.value_label), id(self.value_vector_frame), id(self.value_shape_frame)
+        }
 
     def _string_to_Vector3(self, string):
         """Operates on individual vector component `float` fields."""
+        return self._string_to_float(string)
+
+    def _string_to_RegionShape(self, string):
+        """Operates on individual `RegionShape` dimensional `float` fields."""
         return self._string_to_float(string)
 
     def _string_to_GroupBitSet128(self, string):
@@ -699,10 +815,20 @@ class MapFieldRow(FieldRow):
             self.field_name_label,
             self.value_box,
             self.value_label,
+
             self.value_vector_frame,
             self.value_vector_x,
             self.value_vector_y,
             self.value_vector_z,
+
+            self.value_shape_frame,
+            self.value_shape_type_label,
+            # self.value_shape_type,  # not Combobox
+            self.value_shape_R,
+            self.value_shape_W,
+            self.value_shape_H,
+            self.value_shape_D,
+
             self.value_checkbutton,
         ):
             widget["bg"] = bg_color
@@ -729,9 +855,14 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     FIELD_ROW_CLASS = MapFieldRow
 
     GAME_TYPES_MODULE: ModuleType
+    HAS_COMPOSITE_SHAPE: bool = False
 
     entry_rows: list[MapEntryRow]
     field_rows: list[MapFieldRow]
+
+    e_coord: str | None
+    e_shape_dim: str | None  # "R", "H", "W", etc. (specific to `RegionShape` subtypes)
+    valid_shape_dims: str  # `e_shape_dim` values that are currently valid (for edit decision)
 
     def __init__(
         self,
@@ -745,6 +876,8 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
         self.global_map_choice_func = global_map_choice_func
         self.character_models = {} if character_models is None else character_models
         self.e_coord = None
+        self.e_shape_dim = None
+        self.valid_shape_dims = ""
         self.map_choice = None
         self.entry_canvas_context_menu = None
         super().__init__(project, linker, master=master, toplevel=toplevel, window_title="Soulstruct Map Data Editor")
@@ -1056,13 +1189,21 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             if new_text is not None:
                 self.change_entry_text(row_index, new_text)
 
-    def select_displayed_field_row(self, row_index, set_focus_to_value=True, edit_if_already_selected=True, coord=None):
+    def select_displayed_field_row(
+        self,
+        row_index: int,
+        set_focus_to_value=True,
+        edit_if_already_selected=True,
+        coord: str = None,
+        shape_dim: str = None,
+    ):
         old_row_index = self.selected_field_row_index
 
         if old_row_index is not None and row_index is not None:
             if row_index == old_row_index:
                 if edit_if_already_selected and self.field_rows[row_index].editable:
-                    return self._start_field_value_edit(row_index, coord=coord)
+                    # Don't edit invalid shape dimension fields.
+                    return self._start_field_value_edit(row_index, coord=coord, shape_dim=shape_dim)
                 return
         else:
             self._cancel_field_value_edit()
@@ -1079,7 +1220,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
     # TODO: how does field_press react if a coord is being edited? Should go to next coord, probably.
 
     def _get_field_edit_widget(self, row_index):
-        """Handles special cases (Vector3, GroupBitSet, MSBEntry) or goes to parent method."""
+        """Handles special cases (Vector3, RegionShape, GroupBitSet, MSBEntry) or goes to parent method."""
         field_row = self.field_rows[row_index]
         if not field_row.editable:
             raise TypeError("Cannot edit a boolean or dropdown field. (Internal error, tell Grimrukh!)")
@@ -1097,6 +1238,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             return None
 
         if issubclass(field_type, Vector3):
+            field_value: Vector3
             if self.e_coord is None:
                 return None  # Exact coordinate not clicked.
             return self.Entry(
@@ -1106,6 +1248,20 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
                 sticky="ew",
                 width=5,
                 column="xyz".index(self.e_coord),
+            )
+
+        if issubclass(field_type, RegionShape):
+            field_value: RegionShape
+            if self.e_shape_dim is None:
+                return None  # Exact dimension not clicked.
+            return self.Entry(
+                field_row.value_shape_frame,
+                initial_text=getattr(field_value, self.e_shape_dim),
+                numbers_only=True,
+                sticky="ew",
+                width=5,
+                row=1,
+                column=field_value.SHAPE_DIMS.index(self.e_shape_dim),
             )
 
         if issubclass(field_type, GroupBitSet):
@@ -1122,11 +1278,17 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
 
         return super()._get_field_edit_widget(row_index)
 
-    def _start_field_value_edit(self, row_index, coord=None):
-        if self.e_field_value_edit and self.e_coord and coord and coord != self.e_coord:
-            # Finish up previous coord edit.
-            self._confirm_field_value_edit(row_index)
+    def _start_field_value_edit(self, row_index, coord: str = None, shape_dim: str = None):
+        if self.e_field_value_edit:
+            if self.e_coord and coord and coord != self.e_coord:
+                # Finish up previous coord edit.
+                self._confirm_field_value_edit(row_index)
+            if self.e_shape_dim and shape_dim and shape_dim != self.e_shape_dim:
+                # Finish up previous shape dim edit.
+                self._confirm_field_value_edit(row_index)
+
         self.e_coord = coord
+        self.e_shape_dim = shape_dim
         super()._start_field_value_edit(row_index)
 
     def _cancel_field_value_edit(self):
@@ -1134,6 +1296,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             self.e_field_value_edit.destroy()
             self.e_field_value_edit = None
             self.e_coord = None
+            self.e_shape_dim = None
 
     def _confirm_field_value_edit(self, row_index):
         if self.e_field_value_edit:
@@ -1153,11 +1316,13 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
                 row.update_field_value_display(new_value)
             self._cancel_field_value_edit()
 
-    def change_field_value(self, field_name: str, new_value):
+    def change_field_value(self, field_name: str, new_value: tp.Any):
         msb_entry = self.get_selected_field_dict()  # type: MSBEntry
         old_value = msb_entry[field_name]
         if self.e_coord:
             old_value = getattr(old_value, self.e_coord)
+        if self.e_shape_dim:
+            old_value = getattr(old_value, self.e_shape_dim)
 
         # We check `MSBEntry` equality by ID (as identical entries may appear in different maps, e.g. models).
         if isinstance(new_value, MSBEntry) and id(old_value) == id(new_value):
@@ -1168,6 +1333,9 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             if self.e_coord:
                 # Set just specified coordinate of existing field value vector.
                 setattr(msb_entry[field_name], self.e_coord, new_value)
+            elif self.e_shape_dim:
+                # Set just specified dimension of existing field value shape.
+                setattr(msb_entry[field_name], self.e_shape_dim, new_value)
             else:
                 msb_entry[field_name] = new_value
         except InvalidFieldValueError as e:
@@ -1176,9 +1344,22 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
             return False
         return True
 
+    def change_region_shape_type(self, new_shape_type: RegionShapeType):
+        """Create a new RegionShape (if not already curret), copying over dimensions as best as able."""
+        msb_entry = self.get_selected_field_dict()
+        if not isinstance(msb_entry, BaseMSBRegion):
+            return False  # Shouldn't happen.
+        if msb_entry.shape_type == new_shape_type:
+            return False  # Nothing to change.
+        msb_entry.change_shape_type(new_shape_type)
+        # Refresh field display (new dimensions).
+        self.refresh_fields()
+        return True
+
     def _field_press_up(self, _=None):
         if self.selected_field_row_index is not None:
             edit_new_row = self.e_field_value_edit is not None
+
             new_coord = ""
             if self.e_coord is not None:
                 if self.e_coord == "y":
@@ -1187,6 +1368,7 @@ class MapsEditor(BaseFieldEditor, abc.ABC, tp.Generic[MSB_TYPE]):
                 elif self.e_coord == "z":
                     new_coord = "y"
                     edit_new_row = False
+
             self._confirm_field_value_edit(self.selected_field_row_index)
             if new_coord in {"x", "y"}:
                 self._start_field_value_edit(self.selected_field_row_index, coord=new_coord)
