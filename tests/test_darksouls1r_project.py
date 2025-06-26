@@ -1,9 +1,8 @@
 import shutil
 import unittest
 
-from soulstruct import DSR_PATH
-from soulstruct_gui.darksouls1r import GameDirectoryProject, ProjectWindow
-from soulstruct.utilities.inspection import profile_function
+from soulstruct.config import DSR_PATH
+from soulstruct.gui.darksouls1r import GameDirectoryProject, ProjectWindow
 
 
 RESET_PROJECT = False
@@ -17,12 +16,12 @@ class ProjectTest(unittest.TestCase):
         if not RESET_PROJECT:
             return
         try:
-            shutil.rmtree("_test_project")
+            shutil.rmtree("_test_ds1r_project")
         except FileNotFoundError:
             pass
 
     def test_project_window(self):
-        ProjectWindow(project_path="_test_project", game_root=DSR_VANILLA_PATH).wait_window()
+        ProjectWindow(project_path="_test_ds1r_project", game_root=DSR_VANILLA_PATH).wait_window()
 
     # def test_event_directory_enums(self):
     #     from soulstruct.darksouls1r.events import EventDirectory

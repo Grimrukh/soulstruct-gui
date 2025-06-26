@@ -1,0 +1,31 @@
+[project]
+name = "soulstruct-gui"
+description = "GUI extension for `soulstruct` projects."
+readme = "README.md"
+version = "1.5.0"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.11"  # maximum allowed for Blender 4.4 support
+keywords = ["modding", "FromSoftware", "Dark Souls", "Bloodborne", "Elden Ring", "Sekiro", "Demon's Souls"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+authors = [
+    { name = "Scott Mooney (Grimrukh)", email = "grimrukh@gmail.com" }
+]
+
+dependencies = [
+    "soulstruct",
+    "psutil",
+]
+
+[project.optional-dependencies]
+interactive = ["IPython"]
+translate   = ["googletrans"]
+
+[project.scripts]
+soulstruct-gui = "soulstruct.gui.__main__:app"
+
+[project.urls]
+homepage      = "https://github.com/Grimrukh/soulstruct-gui"
+repository    = "https://github.com/Grimrukh/soulstruct-gui"
+"Issues"      = "https://github.com/Grimrukh/soulstruct-gui/issues"
