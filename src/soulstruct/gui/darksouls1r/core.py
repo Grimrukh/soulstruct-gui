@@ -14,7 +14,7 @@ from soulstruct.darksouls1r.maps import MapStudioDirectory, EnumModuleGenerator
 from soulstruct.darksouls1r.params import GameParamBND
 from soulstruct.darksouls1r.params import DrawParamDirectory
 from soulstruct.darksouls1r.text import MSGDirectory
-from soulstruct.utilities.files import PACKAGE_PATH
+from soulstruct.utilities.files import SOULSTRUCT_PATH
 
 from soulstruct.gui.base import GameDirectoryProject as _BaseGameDirectoryProject, ProjectDataType
 
@@ -79,7 +79,7 @@ class GameDirectoryProject(_BaseGameDirectoryProject):
         TODO: Uses vanilla enums from PTDE, which are currently only those shared in both versions.
         """
         try:
-            vanilla_common_enums = PACKAGE_PATH(
+            vanilla_common_enums = SOULSTRUCT_PATH(
                 f"darksouls1ptde/events/vanilla/enums/common_enums.py"
             ).read_text()
         except FileNotFoundError:
@@ -95,7 +95,7 @@ class GameDirectoryProject(_BaseGameDirectoryProject):
         for map_stem, msb in map_studio_directory.files.items():
             game_map = map_studio_directory.GET_MAP(map_stem)
             try:
-                vanilla_module = PACKAGE_PATH(
+                vanilla_module = SOULSTRUCT_PATH(
                     f"darksouls1ptde/events/vanilla/enums/{game_map.emevd_file_stem}_enums.py"
                 ).read_text()
             except FileNotFoundError:
@@ -168,7 +168,7 @@ class GameDirectoryProject(_BaseGameDirectoryProject):
         """Also need PTDE submodule for DSR."""
         super().copy_events_submodule()
         name = "darksouls1ptde"
-        events_submodule = PACKAGE_PATH(f"{name}/events")
+        events_submodule = SOULSTRUCT_PATH(f"{name}/events")
         (self.project_root / f"events/soulstruct/{name}").mkdir(parents=True, exist_ok=True)
         shutil.copytree(events_submodule, self.project_root / f"events/soulstruct/{name}/events")
         _LOGGER.info(f"Copied `soulstruct.{name}.events` submodule into project events folder (needed for DSR).")
