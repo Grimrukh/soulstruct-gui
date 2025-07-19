@@ -1,6 +1,8 @@
 # soulstruct-gui
 
-**NOTE**: With the release of Soulstruct for Blender and the ever-improving capabilities of
-`DSMapStudio`, this project is no longer actively maintained. It is still available for reference.
+**NOTE**: With the release of [Soulstruct for Blender](https://github.com/Grimrulh/soulstruct-blender) and the 
+ever-improving capabilities of `DSMapStudio`, `Smithbox`, etc., this project is in maintenance mode only and is not
+being actively developed.
 
-Many-in-one editor GUI for Soulstruct projects. Formerly bundled into Soulstruct library.
+Many-in-one editor GUI for [Soulstruct](https://github.com/Grimrukh/soulstruct) projects (formerly bundled into that
+repo).

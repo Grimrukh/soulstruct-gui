@@ -20,10 +20,11 @@ from typing_extensions import Annotated
 
 import typer
 
-from soulstruct.config import DEFAULT_PROJECT_PATH
 from soulstruct.games import Game, get_game
 from soulstruct.utilities.files import read_json
 from soulstruct.gui.misc.game_selector import GameSelector
+
+from soulstruct.gui.config import DEFAULT_PROJECT_PATH
 
 app = typer.Typer(
     help="Launch the Soulstruct GUI or its component editors.",
@@ -209,7 +210,7 @@ def _launch_console(project_cls, source_path: str | None, show_banner: bool):
                 Project.save("maps")     # write maps back to project
                 Project.export_data()    # write all data back to game
 
-            Docs & examples → https://github.com/Grimrukh/soulstruct
+            Docs & examples → https://github.com/Grimrukh/soulstruct-gui
             """
         )
     else:

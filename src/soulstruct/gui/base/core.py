@@ -17,11 +17,11 @@ import typing as tp
 from pathlib import Path
 
 from soulstruct.base.maps.enum_module_generator import EnumModuleGenerator
-from soulstruct.config import DEFAULT_TEXT_EDITOR_FONT_SIZE
 from soulstruct.games import get_game
-from soulstruct.utilities.files import PACKAGE_PATH, read_json, write_json
+from soulstruct.utilities.files import SOULSTRUCT_PATH, read_json, write_json
 from soulstruct.utilities.misc import traverse_path_tree
 
+from soulstruct.gui.config import DEFAULT_TEXT_EDITOR_FONT_SIZE
 from soulstruct.gui.window import CustomDialog
 from .enums import ProjectDataType
 from .exceptions import SoulstructProjectError
@@ -491,7 +491,7 @@ class GameDirectoryProject(abc.ABC):
             _LOGGER.warning("There is no Params data to save in this project.")
             return
         if specific_param:
-            param = params[specific_param]
+            param = params.get_param(specific_param)
             param.write_json(
                 self.project_root / f"params/{specific_param}.json",
                 ignore_pads=True,
@@ -741,7 +741,7 @@ class GameDirectoryProject(abc.ABC):
             backup_path = self.game_root / "soulstruct-backup"
         else:
             backup_path = Path(backup_path)
-        game_files = read_json(PACKAGE_PATH("project/files.json"))[game.name]
+        game_files = read_json(SOULSTRUCT_PATH("project/files.json"))[game.name]
         for file_path_parts in traverse_path_tree(game_files):
             game_file_path = self.game_root / Path(*file_path_parts)
             if not game_file_path.is_file():
@@ -756,7 +756,7 @@ class GameDirectoryProject(abc.ABC):
         game = self.get_game()
         if backup_path is None:
             backup_path = self.game_root / "soulstruct-backup"
-        game_files = read_json(PACKAGE_PATH("project/files.json"))[game.name]
+        game_files = read_json(SOULSTRUCT_PATH("project/files.json"))[game.name]
         for file_path_parts in traverse_path_tree(game_files):
             backup_file_path = backup_path / Path(*file_path_parts)
             if not backup_file_path.is_file():
@@ -951,7 +951,7 @@ class GameDirectoryProject(abc.ABC):
 
     def copy_events_submodule(self, with_window: ProjectWindow = None):
         name = self.get_game().submodule_name
-        events_submodule = PACKAGE_PATH(f"{name}/events")
+        events_submodule = SOULSTRUCT_PATH(f"{name}/events")
         if (self.events_directory / "soulstruct").is_dir():
             self.error(
                 "'events/soulstruct' folder already exists. Cannot copy Python submodule over. "

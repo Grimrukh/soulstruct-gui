@@ -1145,13 +1145,13 @@ class ProjectWindow(SmartFrame, abc.ABC):
 
     def _set_as_default_project(self):
         """Set this project directory as the Soulstruct default in `config.py`."""
-        from soulstruct.config import SET_CONFIG
+        from soulstruct.gui.config import SET_CONFIG
 
         SET_CONFIG(DEFAULT_PROJECT_PATH=str(self.project.project_root))
 
     @staticmethod
     def _clear_default_project():
-        from soulstruct.config import SET_CONFIG
+        from soulstruct.gui.config import SET_CONFIG
 
         SET_CONFIG(DEFAULT_PROJECT_PATH="")
 
